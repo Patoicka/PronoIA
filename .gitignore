@@ -1,0 +1,33 @@
+# Entornos virtuales de Python
+Pronosticos-back/venv/
+Pronosticos-back/env/
+Pronosticos-back/.venv/
+
+# Archivos de caché y compilados de Python
+Pronosticos-back/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Datos y BD locales
+Pronosticos-back/data/
+*.sqlite3
+
+# Node modules y build (aunque el front ya tiene su gitignore, es bueno asegurarlo)
+Pronosticos-front/node_modules/
+Pronosticos-front/dist/
+
+# Archivos de entorno y secretos
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
