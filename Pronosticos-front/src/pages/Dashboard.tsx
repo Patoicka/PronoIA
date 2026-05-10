@@ -1,9 +1,12 @@
 import React from 'react';
 import { Trophy, BarChart3, Zap, Flame, Globe, TrendingUp } from 'lucide-react';
 import { matches, leagues, perf } from '../data/mockData';
+import type { Match } from '../data/mockData';
 import { MatchCard } from '../components/ui/MatchCard';
+import { MatchModal } from '../components/ui/MatchModal';
 
 export const Dashboard: React.FC = () => {
+  const [selectedMatch, setSelectedMatch] = React.useState<Match | null>(null);
   return (
     <section className="space-y-6">
       <header 
@@ -67,7 +70,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="space-y-3">
             {matches.slice(0, 4).map((m, i) => (
-              <MatchCard key={i} match={m} index={i} variant="dashboard" />
+              <MatchCard key={i} match={m} index={i} variant="dashboard" onClick={() => setSelectedMatch(m)} />
             ))}
           </div>
         </div>
@@ -107,6 +110,12 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      <MatchModal 
+        isOpen={!!selectedMatch} 
+        onClose={() => setSelectedMatch(null)} 
+        match={selectedMatch}
+      />
     </section>
   );
 };

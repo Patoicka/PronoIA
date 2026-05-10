@@ -1,3 +1,31 @@
+export interface TeamPrediction {
+  expectedGoals: number;
+  corners: number;
+  cards: number;
+  possession: number;
+  shots: number;
+}
+
+export interface PlayerPrediction {
+  playerName: string;
+  team: string;
+  market: string;
+  line: string;
+  odds: string;
+  prob: number;
+}
+
+export interface MultiMarkets {
+  win1: number;
+  draw: number;
+  win2: number;
+  over15: number;
+  over25: number;
+  btts: number;
+  dc1x: number;
+  dcx2: number;
+}
+
 export interface Match {
   home: string;
   away: string;
@@ -7,191 +35,135 @@ export interface Match {
   odds: string;
   league?: string;
   live?: boolean;
+  /** Jornada (número) desde API-Football */
+  matchday?: number;
+  /** Total de jornadas de la competición (p. ej. 38) */
+  totalMatchdays?: number;
+  /** ISO UTC para ordenar */
+  sortDate?: string;
+  contextSummary?: string;
+  homePred?: TeamPrediction;
+  awayPred?: TeamPrediction;
+  playerPreds?: PlayerPrediction[];
+  multiMarkets?: MultiMarkets;
 }
+
+const teamLogos: Record<string, string> = {
+  'Real Madrid': 'https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg',
+  'Barcelona': 'https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg',
+  'Sevilla': 'https://upload.wikimedia.org/wikipedia/en/3/3b/Sevilla_FC_logo.svg',
+  'Valencia': 'https://upload.wikimedia.org/wikipedia/en/c/ce/Valenciacf.svg',
+  'Atletico Madrid': 'https://upload.wikimedia.org/wikipedia/en/f/f4/Atletico_Madrid_2017_logo.svg',
+  'Man City': 'https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg',
+  'Arsenal': 'https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg',
+  'Liverpool': 'https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg',
+  'Chelsea': 'https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg',
+  'Man United': 'https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg',
+  'Juventus': 'https://upload.wikimedia.org/wikipedia/commons/b/bc/Juventus_FC_2017_icon_%28black%29.svg',
+  'AC Milan': 'https://upload.wikimedia.org/wikipedia/commons/d/d0/Logo_of_AC_Milan.svg',
+  'Inter Milan': 'https://upload.wikimedia.org/wikipedia/commons/0/05/FC_Internazionale_Milano_2021.svg',
+  'AS Roma': 'https://upload.wikimedia.org/wikipedia/en/f/f7/AS_Roma_logo_%282017%29.svg',
+  'Napoli': 'https://upload.wikimedia.org/wikipedia/commons/2/28/S.S.C._Napoli_logo.svg',
+  'Bayern Munich': 'https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg',
+  'Borussia Dortmund': 'https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg',
+  'Bayer Leverkusen': 'https://upload.wikimedia.org/wikipedia/en/5/59/Bayer_04_Leverkusen_logo.svg',
+  'VfB Stuttgart': 'https://upload.wikimedia.org/wikipedia/commons/e/eb/VfB_Stuttgart_1893_Logo.svg',
+  'RB Leipzig': 'https://upload.wikimedia.org/wikipedia/en/0/04/RB_Leipzig_2014_logo.svg',
+  'PSG': 'https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg',
+  'Marseille': 'https://upload.wikimedia.org/wikipedia/commons/d/d8/Olympique_Marseille_logo.svg',
+  'AS Monaco': 'https://upload.wikimedia.org/wikipedia/en/b/ba/AS_Monaco_FC.svg',
+  'Lyon': 'https://upload.wikimedia.org/wikipedia/en/c/c6/Olympique_Lyonnais.svg',
+  'Lens': 'https://upload.wikimedia.org/wikipedia/en/c/cc/RC_Lens_logo.svg',
+};
+
+export const getTeamLogo = (teamName: string) => {
+  return teamLogos[teamName] || 'https://upload.wikimedia.org/wikipedia/commons/e/e4/Globe.svg'; // Placeholder genérico
+};
+
+const defaultContext = "Un partido muy disputado donde ambos equipos buscarán imponer sus condiciones desde el inicio.";
+
+const defaultPred = {
+  homePred: { expectedGoals: 1.8, corners: 6, cards: 2, possession: 55, shots: 12 },
+  awayPred: { expectedGoals: 1.1, corners: 4, cards: 3, possession: 45, shots: 8 }
+};
+
+const defaultPlayerPreds = [
+  { playerName: 'Delantero Estrella', team: 'Local', market: 'Tiros a puerta +1.5', line: '1.5', odds: '1.85', prob: 65 },
+  { playerName: 'Mediocampista', team: 'Visitante', market: 'Tarjetas recibidas', line: '0.5', odds: '2.10', prob: 45 },
+];
 
 export const matchesByLeagueAndMatchday: Record<string, Record<number, Match[]>> = {
   'La Liga': {
     1: [
-      { home:'Barcelona', away:'Real Madrid', time:'20:00', conf:92, pick:'1', odds:'1.85' },
-      { home:'Valencia', away:'Sevilla', time:'16:15', conf:62, pick:'X', odds:'3.80' },
-      { home:'Atletico Madrid', away:'Getafe', time:'18:30', conf:78, pick:'1', odds:'2.15' },
-    ],
-    2: [
-      { home:'Real Madrid', away:'Barcelona', time:'21:00', conf:88, pick:'1', odds:'1.95' },
-      { home:'Sevilla', away:'Valencia', time:'19:45', conf:71, pick:'2', odds:'2.50' },
-      { home:'Atletico Madrid', away:'Real Sociedad', time:'17:15', conf:76, pick:'1', odds:'2.05' },
-    ],
-    3: [
-      { home:'Barcelona', away:'Valencia', time:'20:30', conf:85, pick:'1', odds:'1.72' },
-      { home:'Sevilla', away:'Atletico Madrid', time:'18:00', conf:68, pick:'X', odds:'3.25' },
+      { home:'Barcelona', away:'Real Madrid', time:'20:00', conf:92, pick:'1', odds:'1.85', contextSummary: 'Este partido es el Clásico Español por lo que tendrá un ritmo alto. Se esperan goles de ambos lados pero una ligera ventaja local por el factor estadio.', homePred: { expectedGoals: 2.1, corners: 7, cards: 3, possession: 58, shots: 15 }, awayPred: { expectedGoals: 1.5, corners: 5, cards: 4, possession: 42, shots: 11 }, playerPreds: [
+        { playerName: 'Robert Lewandowski', team: 'Barcelona', market: 'Tiros a puerta +1.5', line: '1.5', odds: '1.95', prob: 68 },
+        { playerName: 'Vinícius Jr.', team: 'Real Madrid', market: 'Tiros totales +2.5', line: '2.5', odds: '1.75', prob: 72 },
+        { playerName: 'Jude Bellingham', team: 'Real Madrid', market: 'Faltas recibidas +1.5', line: '1.5', odds: '1.60', prob: 80 }
+      ], multiMarkets: { win1: 45.2, draw: 25.1, win2: 29.7, over15: 77.6, over25: 54.8, btts: 54.3, dc1x: 71.1, dcx2: 66.5 } },
+      { home:'Valencia', away:'Sevilla', time:'16:15', conf:62, pick:'X', odds:'3.80', contextSummary: 'Partido trabado en el mediocampo. Históricamente empatan mucho en este estadio.', ...defaultPred, playerPreds: defaultPlayerPreds, multiMarkets: { win1: 35.0, draw: 40.0, win2: 25.0, over15: 65.0, over25: 42.0, btts: 48.0, dc1x: 75.0, dcx2: 65.0 } },
+      { home:'Atletico Madrid', away:'Getafe', time:'18:30', conf:78, pick:'1', odds:'2.15', contextSummary: 'Derbi madrileño. Juego defensivo por parte del visitante, pero el Atleti tiene ventaja clara en el xG.', ...defaultPred, playerPreds: defaultPlayerPreds },
     ],
   },
   'Premier League': {
     1: [
-      { home:'Liverpool', away:'Man City', league:'Premier League', time:'17:30', conf:76, pick:'X', odds:'3.40' },
-      { home:'Chelsea', away:'Arsenal', league:'Premier League', time:'15:00', conf:71, pick:'1', odds:'2.10' },
-      { home:'Man United', away:'Tottenham', time:'13:00', conf:62, pick:'X', odds:'3.60' },
-    ],
-    2: [
-      { home:'Man City', away:'Liverpool', time:'16:00', conf:81, pick:'1', odds:'2.20' },
-      { home:'Arsenal', away:'Chelsea', time:'14:30', conf:73, pick:'1', odds:'2.05' },
-      { home:'Brighton', away:'Man United', time:'18:45', conf:65, pick:'2', odds:'2.40' },
-    ],
-    3: [
-      { home:'Liverpool', away:'Chelsea', time:'19:45', conf:79, pick:'1', odds:'1.90' },
-      { home:'Arsenal', away:'Man City', time:'17:30', conf:74, pick:'2', odds:'2.30' },
+      { home:'Liverpool', away:'Man City', league:'Premier League', time:'17:30', conf:76, pick:'X', odds:'3.40', contextSummary: 'Choque de titanes en Anfield. El City dominará la posesión pero las transiciones del Liverpool equilibran la balanza.', homePred: { expectedGoals: 1.7, corners: 5, cards: 2, possession: 45, shots: 10 }, awayPred: { expectedGoals: 1.8, corners: 6, cards: 2, possession: 55, shots: 12 }, playerPreds: [
+        { playerName: 'Erling Haaland', team: 'Man City', market: 'Anotará en cualquier momento', line: '0.5', odds: '2.10', prob: 55 },
+        { playerName: 'Mohamed Salah', team: 'Liverpool', market: 'Tiros a puerta +0.5', line: '0.5', odds: '1.45', prob: 85 }
+      ] },
+      { home:'Chelsea', away:'Arsenal', league:'Premier League', time:'15:00', conf:71, pick:'1', odds:'2.10', contextSummary: defaultContext, ...defaultPred, playerPreds: defaultPlayerPreds },
+      { home:'Man United', away:'Tottenham', time:'13:00', conf:62, pick:'X', odds:'3.60', contextSummary: defaultContext, ...defaultPred, playerPreds: defaultPlayerPreds },
     ],
   },
   'Serie A': {
     1: [
-      { home:'Juventus', away:'AC Milan', league:'Serie A', time:'18:45', conf:68, pick:'2', odds:'2.90' },
-      { home:'Inter Milan', away:'Napoli', time:'20:45', conf:77, pick:'1', odds:'2.10' },
-      { home:'AS Roma', away:'Lazio', time:'15:00', conf:64, pick:'X', odds:'3.40' },
-    ],
-    2: [
-      { home:'AC Milan', away:'Juventus', time:'19:45', conf:72, pick:'2', odds:'2.85' },
-      { home:'Napoli', away:'Inter Milan', time:'20:30', conf:69, pick:'1', odds:'2.55' },
-      { home:'Lazio', away:'AS Roma', time:'17:00', conf:61, pick:'X', odds:'3.55' },
-    ],
-    3: [
-      { home:'Juventus', away:'Napoli', time:'20:00', conf:84, pick:'1', odds:'1.85' },
-      { home:'Inter Milan', away:'AC Milan', time:'18:15', conf:76, pick:'1', odds:'2.25' },
+      { home:'Juventus', away:'AC Milan', league:'Serie A', time:'18:45', conf:68, pick:'2', odds:'2.90', contextSummary: defaultContext, ...defaultPred, playerPreds: defaultPlayerPreds },
+      { home:'Inter Milan', away:'Napoli', time:'20:45', conf:77, pick:'1', odds:'2.10', contextSummary: defaultContext, ...defaultPred, playerPreds: defaultPlayerPreds },
     ],
   },
   'Bundesliga': {
     1: [
-      { home:'Bayern Munich', away:'Borussia Dortmund', league:'Bundesliga', time:'19:30', conf:89, pick:'1', odds:'1.72' },
-      { home:'Bayer Leverkusen', away:'VfB Stuttgart', time:'15:30', conf:75, pick:'1', odds:'1.95' },
-      { home:'RB Leipzig', away:'Werder Bremen', time:'17:30', conf:82, pick:'1', odds:'1.65' },
-    ],
-    2: [
-      { home:'Borussia Dortmund', away:'Bayern Munich', time:'18:30', conf:74, pick:'2', odds:'2.75' },
-      { home:'VfB Stuttgart', away:'Bayer Leverkusen', time:'16:00', conf:68, pick:'X', odds:'3.30' },
-      { home:'Werder Bremen', away:'RB Leipzig', time:'19:30', conf:71, pick:'2', odds:'2.90' },
-    ],
-    3: [
-      { home:'Bayern Munich', away:'Bayer Leverkusen', time:'19:45', conf:87, pick:'1', odds:'1.58' },
-      { home:'Borussia Dortmund', away:'VfB Stuttgart', time:'17:00', conf:79, pick:'1', odds:'2.15' },
+      { home:'Bayern Munich', away:'Borussia Dortmund', league:'Bundesliga', time:'19:30', conf:89, pick:'1', odds:'1.72', contextSummary: 'Der Klassiker. Bayern llega en excelente forma ofensiva y promedia más de 2 goles por partido en casa contra el Dortmund.', homePred: { expectedGoals: 2.8, corners: 8, cards: 1, possession: 62, shots: 18 }, awayPred: { expectedGoals: 0.9, corners: 3, cards: 2, possession: 38, shots: 7 }, playerPreds: defaultPlayerPreds },
     ],
   },
   'Ligue 1': {
     1: [
-      { home:'PSG', away:'Marseille', league:'Ligue 1', time:'21:00', conf:84, pick:'1', odds:'1.55' },
-      { home:'AS Monaco', away:'Lyon', time:'19:00', conf:73, pick:'1', odds:'2.20' },
-      { home:'Lens', away:'Nice', time:'17:00', conf:66, pick:'X', odds:'3.15' },
-    ],
-    2: [
-      { home:'Marseille', away:'PSG', time:'20:00', conf:67, pick:'2', odds:'3.50' },
-      { home:'Lyon', away:'AS Monaco', time:'19:30', conf:71, pick:'2', odds:'2.65' },
-      { home:'Nice', away:'Lens', time:'18:00', conf:69, pick:'1', odds:'2.30' },
-    ],
-    3: [
-      { home:'PSG', away:'Lyon', time:'21:00', conf:86, pick:'1', odds:'1.68' },
-      { home:'Marseille', away:'AS Monaco', time:'19:45', conf:74, pick:'1', odds:'2.35' },
+      { home:'PSG', away:'Marseille', league:'Ligue 1', time:'21:00', conf:84, pick:'1', odds:'1.55', contextSummary: defaultContext, ...defaultPred, playerPreds: defaultPlayerPreds },
     ],
   },
 };
 
 export const matches: Match[] = [
-  ...matchesByLeagueAndMatchday['La Liga'][1].map(m => ({ ...m, league: 'La Liga', live: true })),
-  ...matchesByLeagueAndMatchday['Premier League'][1].map(m => ({ ...m, league: 'Premier League' })),
-  ...matchesByLeagueAndMatchday['Serie A'][1].map(m => ({ ...m, league: 'Serie A' })),
-  ...matchesByLeagueAndMatchday['Bundesliga'][1].map(m => ({ ...m, league: 'Bundesliga' })),
-  ...matchesByLeagueAndMatchday['Ligue 1'][1].map(m => ({ ...m, league: 'Ligue 1' })),
+  ...(matchesByLeagueAndMatchday['La Liga'][1] || []).map(m => ({ ...m, league: 'La Liga', live: true })),
+  ...(matchesByLeagueAndMatchday['Premier League'][1] || []).map(m => ({ ...m, league: 'Premier League' })),
+  ...(matchesByLeagueAndMatchday['Serie A'][1] || []).map(m => ({ ...m, league: 'Serie A' })),
+  ...(matchesByLeagueAndMatchday['Bundesliga'][1] || []).map(m => ({ ...m, league: 'Bundesliga' })),
+  ...(matchesByLeagueAndMatchday['Ligue 1'][1] || []).map(m => ({ ...m, league: 'Ligue 1' })),
 ];
 
 export const teamStats: Record<string, any> = {
-  'Real Madrid': { yellows: 24, reds: 1, corners: 142, tacklesWon: 487, shotsOnTarget: 186, possessionAvg: 62, foulsCommitted: 289, clearances: 412 },
-  'Barcelona': { yellows: 28, reds: 2, corners: 138, tacklesWon: 521, shotsOnTarget: 172, possessionAvg: 65, foulsCommitted: 301, clearances: 398 },
-  'Sevilla': { yellows: 22, reds: 0, corners: 98, tacklesWon: 445, shotsOnTarget: 124, possessionAvg: 48, foulsCommitted: 267, clearances: 356 },
-  'Valencia': { yellows: 20, reds: 1, corners: 85, tacklesWon: 412, shotsOnTarget: 112, possessionAvg: 51, foulsCommitted: 278, clearances: 387 },
-  'Atletico Madrid': { yellows: 31, reds: 2, corners: 96, tacklesWon: 498, shotsOnTarget: 118, possessionAvg: 47, foulsCommitted: 312, clearances: 421 },
-  'Man City': { yellows: 19, reds: 0, corners: 156, tacklesWon: 412, shotsOnTarget: 198, possessionAvg: 68, foulsCommitted: 245, clearances: 356 },
-  'Arsenal': { yellows: 23, reds: 1, corners: 124, tacklesWon: 478, shotsOnTarget: 164, possessionAvg: 59, foulsCommitted: 289, clearances: 398 },
-  'Liverpool': { yellows: 25, reds: 1, corners: 112, tacklesWon: 501, shotsOnTarget: 142, possessionAvg: 54, foulsCommitted: 298, clearances: 412 },
-  'Chelsea': { yellows: 27, reds: 2, corners: 98, tacklesWon: 434, shotsOnTarget: 118, possessionAvg: 52, foulsCommitted: 301, clearances: 389 },
-  'Man United': { yellows: 26, reds: 1, corners: 102, tacklesWon: 421, shotsOnTarget: 126, possessionAvg: 50, foulsCommitted: 315, clearances: 405 },
-  'Juventus': { yellows: 24, reds: 1, corners: 115, tacklesWon: 456, shotsOnTarget: 142, possessionAvg: 55, foulsCommitted: 267, clearances: 398 },
-  'AC Milan': { yellows: 22, reds: 0, corners: 108, tacklesWon: 489, shotsOnTarget: 138, possessionAvg: 52, foulsCommitted: 278, clearances: 387 },
-  'Inter Milan': { yellows: 20, reds: 1, corners: 105, tacklesWon: 512, shotsOnTarget: 135, possessionAvg: 51, foulsCommitted: 271, clearances: 402 },
-  'AS Roma': { yellows: 28, reds: 2, corners: 96, tacklesWon: 434, shotsOnTarget: 118, possessionAvg: 49, foulsCommitted: 312, clearances: 376 },
-  'Napoli': { yellows: 25, reds: 1, corners: 92, tacklesWon: 421, shotsOnTarget: 112, possessionAvg: 50, foulsCommitted: 298, clearances: 368 },
-  'Bayern Munich': { yellows: 16, reds: 0, corners: 168, tacklesWon: 467, shotsOnTarget: 214, possessionAvg: 66, foulsCommitted: 234, clearances: 378 },
-  'Borussia Dortmund': { yellows: 21, reds: 1, corners: 135, tacklesWon: 489, shotsOnTarget: 175, possessionAvg: 52, foulsCommitted: 289, clearances: 412 },
-  'Bayer Leverkusen': { yellows: 19, reds: 0, corners: 118, tacklesWon: 478, shotsOnTarget: 156, possessionAvg: 54, foulsCommitted: 267, clearances: 398 },
-  'VfB Stuttgart': { yellows: 23, reds: 1, corners: 112, tacklesWon: 445, shotsOnTarget: 142, possessionAvg: 48, foulsCommitted: 301, clearances: 421 },
-  'RB Leipzig': { yellows: 20, reds: 1, corners: 98, tacklesWon: 512, shotsOnTarget: 128, possessionAvg: 49, foulsCommitted: 278, clearances: 389 },
-  'PSG': { yellows: 18, reds: 0, corners: 152, tacklesWon: 421, shotsOnTarget: 198, possessionAvg: 61, foulsCommitted: 256, clearances: 367 },
-  'Marseille': { yellows: 26, reds: 1, corners: 126, tacklesWon: 512, shotsOnTarget: 162, possessionAvg: 48, foulsCommitted: 298, clearances: 405 },
-  'AS Monaco': { yellows: 22, reds: 1, corners: 114, tacklesWon: 478, shotsOnTarget: 142, possessionAvg: 50, foulsCommitted: 271, clearances: 387 },
-  'Lyon': { yellows: 24, reds: 2, corners: 98, tacklesWon: 445, shotsOnTarget: 124, possessionAvg: 47, foulsCommitted: 312, clearances: 398 },
-  'Lens': { yellows: 28, reds: 1, corners: 92, tacklesWon: 456, shotsOnTarget: 116, possessionAvg: 46, foulsCommitted: 325, clearances: 412 },
+  'Real Madrid': { winPct: 78, drawPct: 15, lossPct: 7, yellows: 24, reds: 1, corners: 142, tacklesWon: 487, shotsOnTarget: 186, possessionAvg: 62, foulsCommitted: 289, clearances: 412 },
+  'Barcelona': { winPct: 75, drawPct: 11, lossPct: 14, yellows: 28, reds: 2, corners: 138, tacklesWon: 521, shotsOnTarget: 172, possessionAvg: 65, foulsCommitted: 301, clearances: 398 },
+  'Man City': { winPct: 82, drawPct: 14, lossPct: 4, yellows: 19, reds: 0, corners: 156, tacklesWon: 412, shotsOnTarget: 198, possessionAvg: 68, foulsCommitted: 245, clearances: 356 },
+  'Liverpool': { winPct: 68, drawPct: 18, lossPct: 14, yellows: 25, reds: 1, corners: 112, tacklesWon: 501, shotsOnTarget: 142, possessionAvg: 54, foulsCommitted: 298, clearances: 412 },
+  'Bayern Munich': { winPct: 85, drawPct: 7, lossPct: 8, yellows: 16, reds: 0, corners: 168, tacklesWon: 467, shotsOnTarget: 214, possessionAvg: 66, foulsCommitted: 234, clearances: 378 },
+  // Valores default para el resto...
 };
+
+// Se rellena el resto con valores aproximados para evitar errores
+Object.keys(teamLogos).forEach(team => {
+  if (!teamStats[team]) {
+    teamStats[team] = { winPct: 50, drawPct: 25, lossPct: 25, yellows: 20, reds: 1, corners: 100, tacklesWon: 450, shotsOnTarget: 130, possessionAvg: 50, foulsCommitted: 280, clearances: 390 };
+  }
+});
 
 export const teamPlayers: Record<string, any[]> = {
   'Real Madrid': [
     { name: 'Karim Benzema', goals: 18, assists: 8, yellows: 2, reds: 0, matches: 24 },
     { name: 'Vinícius Jr.', goals: 12, assists: 6, yellows: 4, reds: 0, matches: 22 },
-    { name: 'Federico Valverde', goals: 3, assists: 5, yellows: 3, reds: 0, matches: 20 },
-    { name: 'Toni Kroos', goals: 2, assists: 4, yellows: 1, reds: 0, matches: 19 },
-    { name: 'Luka Modrić', goals: 1, assists: 3, yellows: 2, reds: 0, matches: 18 },
   ],
   'Barcelona': [
     { name: 'Robert Lewandowski', goals: 19, assists: 7, yellows: 3, reds: 0, matches: 23 },
-    { name: 'Ousmane Dembélé', goals: 8, assists: 5, yellows: 2, reds: 0, matches: 21 },
     { name: 'Pedri', goals: 4, assists: 6, yellows: 2, reds: 0, matches: 22 },
-    { name: 'Gavi', goals: 3, assists: 4, yellows: 3, reds: 0, matches: 20 },
-    { name: 'Sergi Busquets', goals: 0, assists: 2, yellows: 1, reds: 0, matches: 19 },
-  ],
-  // We can add the others based on HTML...
-  'Man City': [
-    { name: 'Erling Haaland', goals: 24, assists: 6, yellows: 2, reds: 0, matches: 21 },
-    { name: 'Bernardo Silva', goals: 7, assists: 5, yellows: 2, reds: 0, matches: 20 },
-    { name: 'Jack Grealish', goals: 5, assists: 8, yellows: 3, reds: 0, matches: 19 },
-    { name: 'Phil Foden', goals: 8, assists: 7, yellows: 1, reds: 0, matches: 18 },
-    { name: 'Rodri', goals: 2, assists: 3, yellows: 2, reds: 0, matches: 22 },
-  ],
-  'Arsenal': [
-    { name: 'Bukayo Saka', goals: 9, assists: 7, yellows: 2, reds: 0, matches: 20 },
-    { name: 'Emile Smith Rowe', goals: 6, assists: 4, yellows: 1, reds: 0, matches: 18 },
-    { name: 'Gabriel Jesus', goals: 7, assists: 5, yellows: 3, reds: 0, matches: 19 },
-    { name: 'Martin Ødegaard', goals: 4, assists: 6, yellows: 2, reds: 0, matches: 21 },
-    { name: 'Thomas Partey', goals: 1, assists: 2, yellows: 2, reds: 0, matches: 17 },
-  ],
-  'Liverpool': [
-    { name: 'Mohamed Salah', goals: 11, assists: 6, yellows: 1, reds: 0, matches: 20 },
-    { name: 'Luis Díaz', goals: 8, assists: 4, yellows: 2, reds: 0, matches: 19 },
-    { name: 'Darwin Núñez', goals: 6, assists: 2, yellows: 4, reds: 1, matches: 16 },
-    { name: 'Cody Gakpo', goals: 4, assists: 3, yellows: 1, reds: 0, matches: 15 },
-    { name: 'Dominic Szoboszlai', goals: 2, assists: 3, yellows: 2, reds: 0, matches: 14 },
-  ],
-  'Bayern Munich': [
-    { name: 'Serge Gnabry', goals: 10, assists: 5, yellows: 1, reds: 0, matches: 18 },
-    { name: 'Kingsley Coman', goals: 7, assists: 6, yellows: 2, reds: 0, matches: 16 },
-    { name: 'Leroy Sané', goals: 8, assists: 4, yellows: 2, reds: 0, matches: 17 },
-    { name: 'Thomas Müller', goals: 5, assists: 7, yellows: 1, reds: 0, matches: 19 },
-    { name: 'Joshua Kimmich', goals: 1, assists: 3, yellows: 2, reds: 0, matches: 20 },
-  ],
-  'PSG': [
-    { name: 'Kylian Mbappé', goals: 20, assists: 8, yellows: 2, reds: 0, matches: 22 },
-    { name: 'Neymar', goals: 9, assists: 10, yellows: 3, reds: 0, matches: 18 },
-    { name: 'Marco Verratti', goals: 1, assists: 2, yellows: 1, reds: 0, matches: 17 },
-    { name: 'Achraf Hakimi', goals: 3, assists: 4, yellows: 2, reds: 0, matches: 19 },
-    { name: 'Marquinhos', goals: 0, assists: 0, yellows: 2, reds: 0, matches: 21 },
-  ],
-  'Juventus': [
-    { name: 'Dusan Vlahovic', goals: 14, assists: 3, yellows: 3, reds: 0, matches: 20 },
-    { name: 'Juan Cuadrado', goals: 2, assists: 5, yellows: 2, reds: 0, matches: 18 },
-    { name: 'Weston McKennie', goals: 3, assists: 2, yellows: 3, reds: 0, matches: 16 },
-    { name: 'Manuel Locatelli', goals: 1, assists: 1, yellows: 2, reds: 0, matches: 17 },
-    { name: 'Leonardo Bonucci', goals: 0, assists: 0, yellows: 1, reds: 0, matches: 19 },
-  ],
-  'Inter Milan': [
-    { name: 'Lautaro Martínez', goals: 12, assists: 4, yellows: 2, reds: 0, matches: 19 },
-    { name: 'Romelu Lukaku', goals: 8, assists: 3, yellows: 3, reds: 0, matches: 15 },
-    { name: 'Nicolo Barella', goals: 2, assists: 4, yellows: 2, reds: 0, matches: 18 },
-    { name: 'Denzel Dumfries', goals: 3, assists: 2, yellows: 2, reds: 0, matches: 17 },
-    { name: 'Alessandro Bastoni', goals: 0, assists: 0, yellows: 1, reds: 0, matches: 20 },
   ],
 };
 
@@ -199,38 +171,17 @@ export const standings: Record<string, any[]> = {
   'La Liga': [
     { pos:1, team:'Real Madrid', played:28, wins:22, draws:4, losses:2, gf:68, ga:28, gd:40, pts:70 },
     { pos:2, team:'Barcelona', played:28, wins:21, draws:3, losses:4, gf:65, ga:31, gd:34, pts:66 },
-    { pos:3, team:'Sevilla', played:28, wins:17, draws:6, losses:5, gf:52, ga:35, gd:17, pts:57 },
-    { pos:4, team:'Valencia', played:28, wins:14, draws:8, losses:6, gf:48, ga:32, gd:16, pts:50 },
-    { pos:5, team:'Atletico Madrid', played:28, wins:13, draws:7, losses:8, gf:45, ga:38, gd:7, pts:46 },
+    { pos:3, team:'Atletico Madrid', played:28, wins:13, draws:7, losses:8, gf:45, ga:38, gd:7, pts:46 },
   ],
   'Premier League': [
     { pos:1, team:'Man City', played:28, wins:23, draws:4, losses:1, gf:72, ga:22, gd:50, pts:73 },
     { pos:2, team:'Arsenal', played:28, wins:21, draws:3, losses:4, gf:68, ga:28, gd:40, pts:66 },
     { pos:3, team:'Liverpool', played:28, wins:19, draws:5, losses:4, gf:62, ga:32, gd:30, pts:62 },
-    { pos:4, team:'Chelsea', played:28, wins:16, draws:6, losses:6, gf:55, ga:38, gd:17, pts:54 },
-    { pos:5, team:'Man United', played:28, wins:14, draws:8, losses:6, gf:50, ga:42, gd:8, pts:50 },
-  ],
-  'Serie A': [
-    { pos:1, team:'Juventus', played:28, wins:21, draws:4, losses:3, gf:64, ga:29, gd:35, pts:67 },
-    { pos:2, team:'AC Milan', played:28, wins:20, draws:3, losses:5, gf:62, ga:34, gd:28, pts:63 },
-    { pos:3, team:'Inter Milan', played:28, wins:18, draws:6, losses:4, gf:58, ga:31, gd:27, pts:60 },
-    { pos:4, team:'AS Roma', played:28, wins:16, draws:5, losses:7, gf:52, ga:36, gd:16, pts:53 },
-    { pos:5, team:'Napoli', played:28, wins:15, draws:4, losses:9, gf:48, ga:40, gd:8, pts:49 },
   ],
   'Bundesliga': [
     { pos:1, team:'Bayern Munich', played:28, wins:24, draws:2, losses:2, gf:76, ga:25, gd:51, pts:74 },
     { pos:2, team:'Borussia Dortmund', played:28, wins:21, draws:3, losses:4, gf:68, ga:32, gd:36, pts:66 },
-    { pos:3, team:'Bayer Leverkusen', played:28, wins:19, draws:4, losses:5, gf:62, ga:38, gd:24, pts:61 },
-    { pos:4, team:'VfB Stuttgart', played:28, wins:17, draws:6, losses:5, gf:58, ga:35, gd:23, pts:57 },
-    { pos:5, team:'RB Leipzig', played:28, wins:16, draws:5, losses:7, gf:54, ga:40, gd:14, pts:53 },
-  ],
-  'Ligue 1': [
-    { pos:1, team:'PSG', played:28, wins:23, draws:4, losses:1, gf:75, ga:23, gd:52, pts:73 },
-    { pos:2, team:'Marseille', played:28, wins:19, draws:6, losses:3, gf:62, ga:28, gd:34, pts:63 },
-    { pos:3, team:'AS Monaco', played:28, wins:18, draws:5, losses:5, gf:58, ga:34, gd:24, pts:59 },
-    { pos:4, team:'Lyon', played:28, wins:16, draws:4, losses:8, gf:52, ga:40, gd:12, pts:52 },
-    { pos:5, team:'Lens', played:28, wins:15, draws:3, losses:10, gf:48, ga:45, gd:3, pts:48 },
-  ],
+  ]
 };
 
 export const leaguesList = [

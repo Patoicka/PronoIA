@@ -20,17 +20,28 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onClick, index = 0,
         onClick={onClick}
       >
         <div className="flex-1">
-          <p className="font-semibold">{match.home} <span style={{ color: '#888' }}>vs</span> {match.away}</p>
-          <p style={{ color: '#888', fontSize: '0.875rem' }}>
-            {match.live ? (
-              <span className="flex items-center gap-1 text-xs font-mono" style={{ color: '#22783c' }}>
-                <span className="pulse-dot w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#22783c' }}></span>
-                EN VIVO
+          <p className="font-semibold text-lg">{match.home} <span style={{ color: '#555', fontWeight: 'normal', fontSize: '0.9rem', margin: '0 4px' }}>vs</span> {match.away}</p>
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            {match.sortDate && (
+              <span className="text-[11px] font-medium" style={{ color: '#666' }}>
+                {new Date(match.sortDate).toLocaleDateString([], {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                })}
               </span>
-            ) : (
-              `Hoy a las ${match.time}`
             )}
-          </p>
+            <p style={{ color: '#888', fontSize: '0.875rem' }}>
+              {match.live ? (
+                <span className="flex items-center gap-1.5 text-xs font-mono font-bold" style={{ color: '#22783c' }}>
+                  <span className="pulse-dot w-2 h-2 rounded-full inline-block" style={{ background: '#22783c' }}></span>
+                  EN VIVO
+                </span>
+              ) : (
+                <span className="text-sm font-medium">{match.time}</span>
+              )}
+            </p>
+          </div>
         </div>
         <div className="text-right">
           <div className="font-bold text-lg" style={{ color: isHighConf ? '#c85000' : '#22783c' }}>
@@ -46,8 +57,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onClick, index = 0,
   // Dashboard variant
   return (
     <div 
-      className="fade-in rounded-xl p-4 card-hover" 
+      className="fade-in rounded-xl p-4 card-hover cursor-pointer" 
       style={{ background: '#141414', border: '1px solid #1e1e1e', animationDelay: `${0.15 * index}s` }}
+      onClick={onClick}
     >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-mono" style={{ color: '#888' }}>{match.league}</span>
