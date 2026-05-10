@@ -26,6 +26,7 @@ class Team(Base):
     city = Column(String)
     stadium_name = Column(String)
     altitude = Column(Float)
+    market_value = Column(Float, default=0.0)
 
 class Manager(Base):
     __tablename__ = "managers"
