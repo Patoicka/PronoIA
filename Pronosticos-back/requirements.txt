@@ -5,3 +5,7 @@ xgboost
 psycopg2
 fastapi
 uvicorn
+bcrypt
+python-jose[cryptography]
+python-dotenv
+pydantic[email]

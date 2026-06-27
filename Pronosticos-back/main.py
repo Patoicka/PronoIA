@@ -25,6 +25,7 @@ from api_client import (
 )
 from odds_client import fetch_sport_odds, get_all_markets_from_odds, SPORT_KEY_MAP
 from database import get_db
+import auth
 
 load_dotenv()
 
@@ -55,7 +56,8 @@ def _call_deepseek(match_id: int, home_name: str, away_name: str, data_summary: 
         f"Instrucciones:\n"
         f"- Usa los datos como base PERO añade contexto real si lo conoces (títulos recientes, figura del equipo, rivalidades históricas)\n"
         f"- Sé directo y convincente, como un experto dando su opinión clara\n"
-        f"- Traduce los datos técnicos a lenguaje natural (no digas 'Elo', di 'nivel histórico' o 'jerarquía')\n"
+        f"- Traduce los datos técnicos a lenguaje natural (no digas 'Elo', di 'nivel histórico')\n"
+        f"- Evita frases absolutas o despectivas como 'no tiene oportunidad', 'es completamente superior', 'diferencia abismal', 'sin complicaciones', 'aplastante', 'dominará fácilmente'. En su lugar usa lenguaje matizado: 'parte como favorito', 'tiene ventaja', 'se espera que...'\n"
         f"- Máximo 90 palabras\n"
         f"- Solo el párrafo, sin títulos ni listas"
     )
@@ -757,6 +759,8 @@ def _log_startup():
         len(_live_profiles),
     )
 
+
+app.include_router(auth.router)
 
 app.add_middleware(
     CORSMiddleware,
