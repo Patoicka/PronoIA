@@ -1,5 +1,6 @@
+import json
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from database import SQLALCHEMY_DATABASE_URL
 import os
 import math
@@ -140,8 +141,61 @@ def calculate_elo_and_features(df):
     
     df['target_dc_1x'] = df['winner'].isin(['home', 'draw']).astype(int)
     df['target_dc_x2'] = df['winner'].isin(['away', 'draw']).astype(int)
-    
+
+    _save_team_state(team_stats, h2h_stats)
+
     return df
+
+
+def _normalize_name(name: str) -> str:
+    """Normaliza nombre de equipo para matching entre proveedores de datos."""
+    for suffix in [" FC", " CF", " SC", " AC", " AS", " SL", " SAD", " F.C.", " C.F."]:
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+    return name.strip().lower()
+
+
+def _save_team_state(team_stats: dict, h2h_stats: dict) -> None:
+    """Persiste el estado de Elo y rachas para usarlo en predicciones de partidos en vivo."""
+    try:
+        engine_s = create_engine(SQLALCHEMY_DATABASE_URL)
+        with engine_s.connect() as conn:
+            rows = conn.execute(text("SELECT id, name FROM teams")).fetchall()
+        id_to_name = {row[0]: row[1] for row in rows}
+
+        teams_out: dict = {}
+        for tid, stats in team_stats.items():
+            raw_name = id_to_name.get(tid, str(tid))
+            key = _normalize_name(raw_name)
+            teams_out[key] = {
+                "original_name": raw_name,
+                "elo": round(stats["elo"], 2),
+                "last_date": stats["last_date"].isoformat() if stats["last_date"] else None,
+                "points": list(stats["points"][-10:]),
+                "gs": list(stats["gs"][-10:]),
+                "gc": list(stats["gc"][-10:]),
+            }
+
+        h2h_out: dict = {}
+        for key_set, history in h2h_stats.items():
+            names = sorted(_normalize_name(id_to_name.get(tid, str(tid))) for tid in key_set)
+            h2h_key = "||".join(names)
+            # Convertir IDs ganadores a nombres normalizados (0 = empate)
+            named_history = []
+            for w in history[-10:]:
+                if w == 0:
+                    named_history.append("draw")
+                else:
+                    named_history.append(_normalize_name(id_to_name.get(w, str(w))))
+            h2h_out[h2h_key] = named_history
+
+        state = {"teams": teams_out, "h2h": h2h_out}
+        os.makedirs("data/processed", exist_ok=True)
+        with open("data/processed/team_state.json", "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        print(f"Estado de {len(teams_out)} equipos guardado en data/processed/team_state.json")
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo guardar team_state.json: {e}")
 
 if __name__ == "__main__":
     df_raw = load_data()
