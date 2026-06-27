@@ -262,6 +262,9 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
             </div>
           )}
 
+          {/* Unlock — solo para usuarios no registrados, entre 1X2 y análisis */}
+          {!user && <UnlockCard />}
+
           {/* Análisis IA — siempre visible */}
           {(match.analysis || match.contextSummary) && (
             <div className="rounded-xl p-4" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
@@ -416,9 +419,7 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                 );
               })()}
             </>
-          ) : (
-            <UnlockCard />
-          )}
+          ) : null}
 
         </div>
       </div>

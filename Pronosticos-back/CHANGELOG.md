@@ -2,6 +2,15 @@
 
 Todas las mejoras notables de la Inteligencia Artificial y la API se documentarán en este archivo.
 
+## [V3.2] - 2026-06-27 · Caché de IA en DB y standings del Mundial
+### Agregado (Added)
+- **Modelo `AIAnalysis`**: Nueva tabla `ai_analyses` en PostgreSQL para persistir los análisis generados por IA con `match_key` único por partido.
+- **Caché persistente de análisis**: `_call_deepseek()` ahora sigue una cadena memoria → DB → API. Una vez generado el análisis de un partido, nunca se vuelve a llamar a la API externa para ese partido, ni siquiera tras reiniciar el servidor.
+- **Endpoint `/api/competitions/{league_id}/standings`**: Obtiene la tabla de posiciones / grupos de la competición desde football-data.org. Para el Mundial devuelve todos los grupos (A–L) con posición, GF, GC, DG y puntos. Maneja 403 y 404 de forma limpia.
+
+### Cambiado (Changed)
+- **Reducción de llamadas a API de IA**: El caché en DB elimina el consumo de tokens por partidos ya analizados, reduciendo el costo operativo a cero para repeticiones.
+
 ## [V3.1] - Diagnóstico de API-Football y temporada actual
 ### Agregado (Added)
 - **Endpoint de salud**: Se agregó `/api/health` para confirmar qué `main.py`, carpeta de trabajo y rutas está ejecutando realmente FastAPI.

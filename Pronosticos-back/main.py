@@ -42,12 +42,30 @@ _deepseek_cache: dict[int, str] = {}
 
 
 def _call_deepseek(match_id: int, home_name: str, away_name: str, data_summary: str) -> str:
-    """Llama a DeepSeek Chat para generar análisis narrativo. Retorna '' si falla."""
+    """Llama a DeepSeek. Busca primero en caché memoria → DB → API."""
     if not DEEPSEEK_API_KEY:
         return ""
+
+    match_key = f"{match_id}_{home_name}_vs_{away_name}"
+
+    # 1) Caché en memoria
     if match_id in _deepseek_cache:
         return _deepseek_cache[match_id]
 
+    # 2) Caché persistente en DB
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+        row = db.query(models.AIAnalysis).filter(models.AIAnalysis.match_key == match_key).first()
+        if row:
+            _deepseek_cache[match_id] = row.analysis
+            db.close()
+            return row.analysis
+        db.close()
+    except Exception as e:
+        logger.warning("[DeepSeek] Error leyendo caché DB: %s", e)
+
+    # 3) Llamada a la API
     prompt = (
         f"Eres un analista de fútbol experto. Genera UN párrafo conciso (3-4 oraciones) en español "
         f"analizando este partido para apostadores deportivos.\n\n"
@@ -57,7 +75,7 @@ def _call_deepseek(match_id: int, home_name: str, away_name: str, data_summary: 
         f"- Usa los datos como base PERO añade contexto real si lo conoces (títulos recientes, figura del equipo, rivalidades históricas)\n"
         f"- Sé directo y convincente, como un experto dando su opinión clara\n"
         f"- Traduce los datos técnicos a lenguaje natural (no digas 'Elo', di 'nivel histórico')\n"
-        f"- Evita frases absolutas o despectivas como 'no tiene oportunidad', 'es completamente superior', 'diferencia abismal', 'sin complicaciones', 'aplastante', 'dominará fácilmente'. En su lugar usa lenguaje matizado: 'parte como favorito', 'tiene ventaja', 'se espera que...'\n"
+        f"- Evita frases absolutas o despectivas como 'no tiene oportunidad', 'es completamente superior', 'diferencia abismal', 'sin complicaciones', 'aplastante', 'dominará fácilmente'. Usa lenguaje matizado: 'parte como favorito', 'tiene ventaja', 'se espera que...'\n"
         f"- Máximo 90 palabras\n"
         f"- Solo el párrafo, sin títulos ni listas"
     )
@@ -76,7 +94,17 @@ def _call_deepseek(match_id: int, home_name: str, away_name: str, data_summary: 
         )
         resp.raise_for_status()
         text = resp.json()["choices"][0]["message"]["content"].strip()
+
+        # Guardar en memoria y DB
         _deepseek_cache[match_id] = text
+        try:
+            db = SessionLocal()
+            db.add(models.AIAnalysis(match_key=match_key, analysis=text))
+            db.commit()
+            db.close()
+        except Exception as e:
+            logger.warning("[DeepSeek] Error guardando en DB: %s", e)
+
         return text
     except Exception as e:
         logger.warning("[DeepSeek] Error para %s vs %s: %s", home_name, away_name, e)
@@ -1050,6 +1078,61 @@ def debug_matches_live(league_id: int = 140, days_ahead: int = 35):
         "sample_matches": sample[:10],
         "errors": errors,
     }
+
+
+@app.get("/api/competitions/{league_id}/standings")
+def get_competition_standings(league_id: int):
+    """Tabla de posiciones / grupos de la competición desde football-data.org."""
+    from api_client import LEAGUE_ID_TO_CODE, _headers, FOOTBALL_DATA_BASE
+
+    code = LEAGUE_ID_TO_CODE.get(league_id)
+    if not code:
+        raise HTTPException(status_code=404, detail="Competición no encontrada")
+
+    try:
+        resp = requests.get(
+            f"{FOOTBALL_DATA_BASE}/competitions/{code}/standings",
+            headers=_headers(),
+            timeout=15,
+        )
+        if resp.status_code == 403:
+            return {"standings": [], "error": "plan_required"}
+        if resp.status_code == 404:
+            return {"standings": [], "error": "not_found"}
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        logger.warning("[standings] Error para %s: %s", code, e)
+        return {"standings": [], "error": str(e)}
+
+    raw_standings = data.get("standings", [])
+    groups = []
+    for s in raw_standings:
+        group_raw = s.get("group") or s.get("stage") or "TOTAL"
+        group_label = (
+            group_raw.replace("GROUP_", "Grupo ")
+                     .replace("_", " ")
+                     .title()
+        )
+        table = []
+        for row in s.get("table", []):
+            team = row.get("team") or {}
+            table.append({
+                "pos":    row.get("position"),
+                "team":   team.get("name") or team.get("shortName") or "Desconocido",
+                "crest":  team.get("crest") or "",
+                "played": row.get("playedGames", 0),
+                "wins":   row.get("won", 0),
+                "draws":  row.get("draw", 0),
+                "losses": row.get("lost", 0),
+                "gf":     row.get("goalsFor", 0),
+                "gc":     row.get("goalsAgainst", 0),
+                "gd":     row.get("goalDifference", 0),
+                "pts":    row.get("points", 0),
+            })
+        groups.append({"group": group_label, "table": table})
+
+    return {"standings": groups, "competition": data.get("competition", {}).get("name", "")}
 
 
 @app.get("/api/competitions/{league_id}/scorers")

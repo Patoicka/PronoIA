@@ -127,3 +127,11 @@ class Prediction(Base):
     probability = Column(Float)
     ai_confidence = Column(Float)
     reasoning = Column(String)
+
+
+class AIAnalysis(Base):
+    __tablename__ = "ai_analyses"
+    id        = Column(Integer, primary_key=True, index=True)
+    match_key = Column(String(255), unique=True, index=True, nullable=False)
+    analysis  = Column(String(2000), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
