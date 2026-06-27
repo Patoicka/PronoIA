@@ -67,47 +67,42 @@ const StatPill: React.FC<{ label: string; value: string | number; accent?: boole
   </div>
 );
 
-const LockedSection: React.FC<{ children: React.ReactNode; rows?: number }> = ({ children, rows = 3 }) => {
-  const { user } = useAuth();
+const UnlockCard: React.FC = () => {
   const [loginOpen, setLoginOpen] = useState(false);
-
-  if (user) return <>{children}</>;
-
+  const perks = [
+    'Mercado de goles (Más de 1.5 / 2.5 / 3.5)',
+    'Goles esperados por equipo',
+    'Doble oportunidad',
+    'Proyecciones IA comparativas',
+    'Apuestas sugeridas por el modelo',
+  ];
   return (
     <>
-      <div className="relative rounded-xl overflow-hidden">
-        {/* Skeleton preview */}
-        <div className="p-4 space-y-3.5" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
-          {Array.from({ length: rows }).map((_, i) => (
-            <div key={i} className="space-y-2">
-              <div className="flex justify-between items-center">
-                <div className="h-2.5 rounded-full" style={{ width: `${40 + i * 12}px`, background: 'var(--border2)' }} />
-                <div className="h-2.5 rounded-full w-10" style={{ background: 'var(--border2)' }} />
-              </div>
-              <div className="h-1.5 rounded-full" style={{ background: 'var(--border2)', width: `${55 + i * 8}%` }} />
-            </div>
-          ))}
-        </div>
-        {/* Overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6"
-          style={{ background: 'rgba(11,17,32,0.90)', backdropFilter: 'blur(2px)' }}>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+      <div className="rounded-xl p-5" style={{ background: 'var(--surface2)', border: '1px solid var(--accent-border)' }}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)' }}>
-            <Lock size={18} style={{ color: 'var(--accent)' }} />
+            <Lock size={16} style={{ color: 'var(--accent)' }} />
           </div>
-          <div className="text-center">
-            <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>Estadística exclusiva</p>
-            <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--text-muted)' }}>
-              Regístrate gratis para desbloquear todos los mercados y análisis
-            </p>
+          <div>
+            <p className="text-sm font-black" style={{ color: 'var(--text)' }}>Desbloquea más estadísticas</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Gratis al crear tu cuenta</p>
           </div>
-          <button
-            onClick={() => setLoginOpen(true)}
-            className="px-5 py-2 rounded-xl text-sm font-bold transition hover:opacity-90"
-            style={{ background: 'var(--accent)', color: '#000' }}>
-            Regístrate gratis
-          </button>
         </div>
+        <ul className="space-y-2 mb-4">
+          {perks.map(p => (
+            <li key={p} className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-black"
+                style={{ background: 'var(--accent-bg)', color: 'var(--accent)' }}>✓</span>
+              {p}
+            </li>
+          ))}
+        </ul>
+        <button onClick={() => setLoginOpen(true)}
+          className="w-full py-2.5 rounded-xl text-sm font-bold transition hover:opacity-90"
+          style={{ background: 'var(--accent)', color: '#000' }}>
+          Regístrate gratis
+        </button>
       </div>
       <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
@@ -163,6 +158,8 @@ const CompareRow: React.FC<{ label: string; left: number; right: number; format:
 // ── Modal principal ──────────────────────────────────────────────────────────
 
 export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }) => {
+  const { user } = useAuth();
+
   React.useEffect(() => {
     if (isOpen) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
@@ -222,103 +219,106 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
 
         {/* Body scrollable */}
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
-          <>
-              {/* 1X2 */}
+
+          {/* 1X2 — siempre visible */}
+          {mm && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <SectionTitle>Resultado (1X2)</SectionTitle>
+                {match.oddsRaw && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full mb-3"
+                    style={{ background: 'var(--surface2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
+                    📊 {match.oddsRaw.bookmaker}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { key: '1', label: match.home, value: mm.win1, odd: match.oddsRaw?.home },
+                  { key: 'X', label: 'Empate',   value: mm.draw, odd: match.oddsRaw?.draw },
+                  { key: '2', label: match.away,  value: mm.win2, odd: match.oddsRaw?.away },
+                ].map(({ key, label, value, odd }) => (
+                  <div key={key} className="rounded-xl p-3 text-center"
+                    style={{
+                      background: match.pick === key ? 'var(--accent-bg)' : 'var(--surface2)',
+                      border: `1px solid ${match.pick === key ? 'var(--accent-border)' : 'var(--border)'}`,
+                    }}>
+                    <p className="text-[10px] font-bold uppercase truncate px-1 mb-1"
+                      style={{ color: match.pick === key ? 'var(--accent)' : 'var(--text-muted)' }}>{label}</p>
+                    <p className="text-xl font-black" style={{ color: match.pick === key ? 'var(--accent)' : 'var(--text-muted)' }}>
+                      {value.toFixed(1)}%
+                    </p>
+                    <p className="text-sm font-bold font-mono mt-1" style={{ color: match.pick === key ? 'var(--accent)' : 'var(--text)' }}>
+                      {odd ? `x${odd.toFixed(2)}` : value > 0 ? `x${(100 / value).toFixed(2)}` : '—'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {!match.oddsRaw && (
+                <p className="text-[10px] mt-2 text-center" style={{ color: 'var(--text-dim)' }}>
+                  ⚠️ Cuotas estimadas por IA · Configura ODDS_API_KEY para cuotas reales
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Análisis IA — siempre visible */}
+          {(match.analysis || match.contextSummary) && (
+            <div className="rounded-xl p-4" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+              <p className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+                <TrendingUp size={12} /> Análisis IA
+              </p>
+              <p className="text-sm leading-relaxed text-justify" style={{ color: 'var(--text-muted)' }}>
+                {match.analysis || match.contextSummary}
+              </p>
+            </div>
+          )}
+
+          {/* Secciones exclusivas */}
+          {user ? (
+            <>
+              {/* Goles */}
               {mm && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <SectionTitle>Resultado (1X2)</SectionTitle>
-                    {match.oddsRaw && (
+                    <SectionTitle>Mercado de goles</SectionTitle>
+                    {tr && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full mb-3"
                         style={{ background: 'var(--surface2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
-                        📊 {match.oddsRaw.bookmaker}
+                        📊 Cuotas reales
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { key: '1', label: match.home, value: mm.win1, odd: match.oddsRaw?.home },
-                      { key: 'X', label: 'Empate',   value: mm.draw, odd: match.oddsRaw?.draw },
-                      { key: '2', label: match.away,  value: mm.win2, odd: match.oddsRaw?.away },
-                    ].map(({ key, label, value, odd }) => (
-                      <div key={key} className="rounded-xl p-3 text-center"
-                        style={{
-                          background: match.pick === key ? 'var(--accent-bg)' : 'var(--surface2)',
-                          border: `1px solid ${match.pick === key ? 'var(--accent-border)' : 'var(--border)'}`,
-                        }}>
-                        <p className="text-[10px] font-bold uppercase truncate px-1 mb-1"
-                          style={{ color: match.pick === key ? 'var(--accent)' : 'var(--text-muted)' }}>{label}</p>
-                        <p className="text-xl font-black" style={{ color: match.pick === key ? 'var(--accent)' : 'var(--text-muted)' }}>
-                          {value.toFixed(1)}%
-                        </p>
-                        {/* Cuota decimal real del bookmaker */}
-                        <p className="text-sm font-bold font-mono mt-1" style={{ color: match.pick === key ? 'var(--accent)' : 'var(--text)' }}>
-                          {odd ? `x${odd.toFixed(2)}` : value > 0 ? `x${(100 / value).toFixed(2)}` : '—'}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="space-y-2.5">
+                    <ProbBar label="Más de 1.5 goles" value={mm.over15} odd={tr?.odd_over15} />
+                    <ProbBar label="Más de 2.5 goles" value={mm.over25} odd={tr?.odd_over25} />
+                    {ext && <ProbBar label="Más de 3.5 goles" value={ext.goals_over35} odd={tr?.odd_over35} />}
                   </div>
-                  {!match.oddsRaw && (
-                    <p className="text-[10px] mt-2 text-center" style={{ color: 'var(--text-dim)' }}>
-                      ⚠️ Cuotas estimadas por IA · Configura ODDS_API_KEY para cuotas reales
-                    </p>
-                  )}
                 </div>
-              )}
-
-              {/* Goles */}
-              {mm && (
-                <LockedSection rows={3}>
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <SectionTitle>Mercado de goles</SectionTitle>
-                      {tr && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full mb-3"
-                          style={{ background: 'var(--surface2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
-                          📊 Cuotas reales
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-2.5">
-                      <ProbBar label="Más de 1.5 goles" value={mm.over15} odd={tr?.odd_over15} />
-                      <ProbBar label="Más de 2.5 goles" value={mm.over25} odd={tr?.odd_over25} />
-                      {ext && <ProbBar label="Más de 3.5 goles" value={ext.goals_over35} odd={tr?.odd_over35} />}
-                    </div>
-                  </div>
-                </LockedSection>
               )}
 
               {/* Goles por equipo */}
               {ext && (
-                <LockedSection rows={3}>
                 <div>
                   <SectionTitle>Goles por equipo</SectionTitle>
                   <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
-                    {/* Header equipos */}
                     <div className="grid grid-cols-[1fr_44px_1fr] px-4 py-3 gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
                       <div>
                         <p className="text-xs font-bold truncate" style={{ color: 'var(--accent)' }}>{match.home}</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-                          xG <span style={{ color: 'var(--text)', fontWeight: 700 }}>{ext.xg_home}</span>
-                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>xG <span style={{ color: 'var(--text)', fontWeight: 700 }}>{ext.xg_home}</span></p>
                       </div>
                       <div />
                       <div className="text-right">
                         <p className="text-xs font-bold truncate" style={{ color: 'var(--success)' }}>{match.away}</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-                          xG <span style={{ color: 'var(--text)', fontWeight: 700 }}>{ext.xg_away}</span>
-                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>xG <span style={{ color: 'var(--text)', fontWeight: 700 }}>{ext.xg_away}</span></p>
                       </div>
                     </div>
-
-                    {/* Filas por umbral */}
                     {[
                       { label: '+0.5', hp: ext.goals_home_over05, ho: ext.odd_gh_over05, ap: ext.goals_away_over05, ao: ext.odd_ga_over05 },
                       { label: '+1.5', hp: ext.goals_home_over15, ho: ext.odd_gh_over15, ap: ext.goals_away_over15, ao: ext.odd_ga_over15 },
                       { label: '+2.5', hp: ext.goals_home_over25, ho: ext.odd_gh_over25, ap: ext.goals_away_over25, ao: ext.odd_ga_over25 },
                     ].map(row => (
                       <div key={row.label} className="px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
-                        {/* Stats */}
                         <div className="grid grid-cols-[1fr_44px_1fr] gap-2 items-center mb-2">
                           <div className="text-right">
                             <span className="text-sm font-bold" style={{ color: 'var(--accent)' }}>{row.hp.toFixed(1)}%</span>
@@ -335,7 +335,6 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                             {row.ao && <span className="text-xs font-mono ml-1.5" style={{ color: 'var(--text-dim)' }}>x{row.ao.toFixed(2)}</span>}
                           </div>
                         </div>
-                        {/* Barras */}
                         <div className="grid grid-cols-[1fr_44px_1fr] gap-2">
                           <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border2)', transform: 'scaleX(-1)' }}>
                             <div className="h-full rounded-full" style={{ width: `${Math.min(row.hp, 100)}%`, background: 'var(--accent)' }} />
@@ -349,13 +348,10 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                     ))}
                   </div>
                 </div>
-                </LockedSection>
               )}
-
 
               {/* Doble oportunidad */}
               {mm && (
-                <LockedSection rows={2}>
                 <div>
                   <SectionTitle>Doble oportunidad</SectionTitle>
                   <div className="space-y-2.5">
@@ -363,28 +359,24 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                     <ProbBar label={`${match.away} o Empate`} value={mm.dcx2} color="var(--success)" />
                   </div>
                 </div>
-                </LockedSection>
               )}
 
               {/* Proyecciones comparativas */}
               {match.homePred && match.awayPred && (
-                <LockedSection rows={3}>
-                  <div>
-                    <SectionTitle>Proyecciones IA</SectionTitle>
-                    <div className="space-y-3">
-                      <CompareRow label="xG" left={match.homePred.expectedGoals} right={match.awayPred.expectedGoals} format={v => v.toFixed(1)} />
-                      <CompareRow label="Posesión" left={match.homePred.possession} right={match.awayPred.possession} format={v => `${v}%`} />
-                      <CompareRow label="Tiros" left={match.homePred.shots} right={match.awayPred.shots} format={v => `${v}`} />
-                    </div>
+                <div>
+                  <SectionTitle>Proyecciones IA</SectionTitle>
+                  <div className="space-y-3">
+                    <CompareRow label="xG" left={match.homePred.expectedGoals} right={match.awayPred.expectedGoals} format={v => v.toFixed(1)} />
+                    <CompareRow label="Posesión" left={match.homePred.possession} right={match.awayPred.possession} format={v => `${v}%`} />
+                    <CompareRow label="Tiros" left={match.homePred.shots} right={match.awayPred.shots} format={v => `${v}`} />
                   </div>
-                </LockedSection>
+                </div>
               )}
 
               {/* Apuestas sugeridas */}
               {mm && (() => {
                 const bets: { label: string; desc: string; prob: number; odd?: number }[] = [];
                 const addIf = (cond: boolean, b: typeof bets[0]) => { if (cond) bets.push(b); };
-
                 addIf(mm.win1 >= 60, { label: `Victoria ${match.home}`, desc: '1', prob: mm.win1, odd: match.oddsRaw?.home });
                 addIf(mm.win2 >= 60, { label: `Victoria ${match.away}`, desc: '2', prob: mm.win2, odd: match.oddsRaw?.away });
                 addIf(mm.over25 >= 55, { label: 'Más de 2.5 goles', desc: 'Over 2.5', prob: mm.over25, odd: tr?.odd_over25 });
@@ -395,12 +387,9 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                   addIf(ext.goals_home_over05 >= 85, { label: `${match.home} marca`, desc: '+0.5', prob: ext.goals_home_over05, odd: ext.odd_gh_over05 });
                   addIf(ext.goals_away_over05 >= 85, { label: `${match.away} marca`, desc: '+0.5', prob: ext.goals_away_over05, odd: ext.odd_ga_over05 });
                 }
-
                 const top = bets.sort((a, b) => b.prob - a.prob).slice(0, 3);
                 if (!top.length) return null;
-
                 return (
-                  <LockedSection rows={3}>
                   <div>
                     <SectionTitle>Apuestas sugeridas</SectionTitle>
                     <div className="space-y-2">
@@ -412,38 +401,25 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                           <div key={i} className="flex items-center gap-3 rounded-xl px-4 py-3"
                             style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
                             <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0"
-                              style={{ background: 'var(--accent)', color: '#000' }}>
-                              {i + 1}
-                            </div>
+                              style={{ background: 'var(--accent)', color: '#000' }}>{i + 1}</div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold truncate" style={{ color: 'var(--text)' }}>{bet.label}</p>
                               <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{bet.prob.toFixed(1)}% de probabilidad</p>
                             </div>
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                              style={{ background: conf.bg, color: conf.color }}>
-                              {conf.label}
-                            </span>
+                              style={{ background: conf.bg, color: conf.color }}>{conf.label}</span>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                  </LockedSection>
                 );
               })()}
+            </>
+          ) : (
+            <UnlockCard />
+          )}
 
-              {/* Análisis */}
-              {(match.analysis || match.contextSummary) && (
-                <div className="rounded-xl p-4" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
-                    <TrendingUp size={12} /> Análisis IA
-                  </p>
-                  <p className="text-sm leading-relaxed text-justify" style={{ color: 'var(--text-muted)' }}>
-                    {match.analysis || match.contextSummary}
-                  </p>
-                </div>
-              )}
-          </>
         </div>
       </div>
     </div>
