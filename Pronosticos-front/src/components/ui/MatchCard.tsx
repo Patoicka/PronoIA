@@ -6,93 +6,122 @@ interface MatchCardProps {
   match: Match;
   onClick?: () => void;
   index?: number;
-  variant?: 'dashboard' | 'list';
 }
 
-export const MatchCard: React.FC<MatchCardProps> = ({ match, onClick, index = 0, variant = 'dashboard' }) => {
-  const isHighConf = match.conf >= 80;
-
-  if (variant === 'list') {
+const TeamCrest: React.FC<{ src?: string; name: string }> = ({ src, name }) => {
+  if (src) {
     return (
-      <div 
-        className="flex items-center justify-between p-4 rounded-lg cursor-pointer transition hover:bg-white/5" 
-        style={{ background: '#0a0a0a', border: '1px solid #1a1a1a' }} 
-        onClick={onClick}
-      >
-        <div className="flex-1">
-          <p className="font-semibold text-lg">{match.home} <span style={{ color: '#555', fontWeight: 'normal', fontSize: '0.9rem', margin: '0 4px' }}>vs</span> {match.away}</p>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            {match.sortDate && (
-              <span className="text-[11px] font-medium" style={{ color: '#666' }}>
-                {new Date(match.sortDate).toLocaleDateString([], {
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short',
-                })}
-              </span>
-            )}
-            <p style={{ color: '#888', fontSize: '0.875rem' }}>
-              {match.live ? (
-                <span className="flex items-center gap-1.5 text-xs font-mono font-bold" style={{ color: '#22783c' }}>
-                  <span className="pulse-dot w-2 h-2 rounded-full inline-block" style={{ background: '#22783c' }}></span>
-                  EN VIVO
-                </span>
-              ) : (
-                <span className="text-sm font-medium">{match.time}</span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="font-bold text-lg" style={{ color: isHighConf ? '#c85000' : '#22783c' }}>
-            {match.conf}%
-          </div>
-          <p style={{ color: '#888', fontSize: '0.75rem' }}>Confianza</p>
-        </div>
-        <ChevronRight style={{ width: '18px', height: '18px', color: '#555', marginLeft: '1rem' }} />
-      </div>
+      <img
+        src={src}
+        alt={name}
+        width={28}
+        height={28}
+        className="object-contain flex-shrink-0 rounded-full p-0.5"
+        style={{ width: 28, height: 28, background: 'rgba(255,255,255,0.05)' }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
     );
   }
-
-  // Dashboard variant
   return (
-    <div 
-      className="fade-in rounded-xl p-4 card-hover cursor-pointer" 
-      style={{ background: '#141414', border: '1px solid #1e1e1e', animationDelay: `${0.15 * index}s` }}
+    <div
+      className="rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
+      style={{ width: 28, height: 28, background: 'var(--surface2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}
+    >
+      {name.slice(0, 2).toUpperCase()}
+    </div>
+  );
+};
+
+const PickPill: React.FC<{ label: string; value: number; active: boolean }> = ({ label, value, active }) => (
+  <div
+    className="flex flex-col items-center px-2.5 py-1.5 rounded-lg"
+    style={{
+      background: active ? 'var(--accent-bg)' : 'var(--surface2)',
+      border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border)'}`,
+      minWidth: 48,
+    }}
+  >
+    <span className="text-[9px] font-bold uppercase tracking-wide leading-none" style={{ color: active ? 'var(--accent)' : 'var(--text-dim)' }}>
+      {label}
+    </span>
+    <span className="text-sm font-bold mt-0.5 leading-none" style={{ color: active ? 'var(--accent)' : 'var(--text-muted)' }}>
+      {value.toFixed(0)}%
+    </span>
+  </div>
+);
+
+function formatDate(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })
+    + ' · ' + d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+}
+
+export const MatchCard: React.FC<MatchCardProps> = ({ match, onClick, index = 0 }) => {
+  const mm = match.multiMarkets;
+
+  return (
+    <div
+      className="card fade-in cursor-pointer p-4"
+      style={{ animationDelay: `${0.04 * index}s` }}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-mono" style={{ color: '#888' }}>{match.league}</span>
-        <div className="flex items-center gap-2">
-          {match.live ? (
-            <span className="flex items-center gap-1 text-xs font-mono" style={{ color: '#22783c' }}>
-              <span className="pulse-dot w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#22783c' }}></span>
-              LIVE
-            </span>
-          ) : (
-            <span className="text-xs font-mono" style={{ color: '#555' }}>{match.time}</span>
-          )}
+      {/* Fila 1: Equipos */}
+      <div className="flex items-center gap-2">
+        {/* Local */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <TeamCrest src={match.homeLogo} name={match.home} />
+          <span className="font-semibold text-sm truncate" style={{ color: 'var(--text)' }}>
+            {match.home}
+          </span>
+        </div>
+
+        {/* VS */}
+        <span className="text-xs font-mono flex-shrink-0 px-1" style={{ color: 'var(--text-dim)' }}>vs</span>
+
+        {/* Visitante (invertido: nombre primero, crest al final) */}
+        <div className="flex items-center gap-2 flex-1 min-w-0 flex-row-reverse">
+          <TeamCrest src={match.awayLogo} name={match.away} />
+          <span className="font-semibold text-sm truncate text-right flex-1 min-w-0" style={{ color: 'var(--text)' }}>
+            {match.away}
+          </span>
         </div>
       </div>
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="font-semibold text-sm">{match.home}</p>
-          <p className="font-semibold text-sm" style={{ color: '#888' }}>vs {match.away}</p>
-        </div>
-        <div className="text-center px-4">
-          <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold" style={{ background: isHighConf ? 'rgba(200,80,0,0.15)' : 'rgba(136,136,136,0.1)', color: isHighConf ? '#c85000' : '#888' }}>
-            {match.pick}
+
+      {/* Fila 2: Fecha / estado */}
+      <div className="flex items-center justify-between mt-2">
+        {match.live ? (
+          <span className="flex items-center gap-1.5 text-[11px] font-bold font-mono" style={{ color: 'var(--success)' }}>
+            <span className="pulse-dot w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
+            EN VIVO
           </span>
-          <p className="text-xs mt-1 font-mono" style={{ color: '#555' }}>{match.odds}</p>
-        </div>
-        <div className="text-right">
-          <div className="flex items-center gap-1">
-            <div className="w-12 h-1.5 rounded-full overflow-hidden" style={{ background: '#1e1e1e' }}>
-              <div className="h-full rounded-full bar-fill" style={{ width: `${match.conf}%`, background: isHighConf ? '#c85000' : '#22783c' }}></div>
-            </div>
-            <span className="text-xs font-mono font-bold" style={{ color: isHighConf ? '#c85000' : '#22783c' }}>{match.conf}%</span>
+        ) : (
+          <span className="text-[11px] font-mono" style={{ color: 'var(--text-dim)' }}>
+            {formatDate(match.sortDate)}
+          </span>
+        )}
+        {match.matchday && (
+          <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+            J{match.matchday}
+          </span>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="my-3" style={{ borderTop: '1px solid var(--border)' }} />
+
+      {/* Fila 3: Mercados */}
+      <div className="relative flex items-center justify-center">
+        {mm ? (
+          <div className="flex gap-1.5">
+            <PickPill label="Local" value={mm.win1} active={match.pick === '1'} />
+            <PickPill label="Empate" value={mm.draw} active={match.pick === 'X'} />
+            <PickPill label="Visita" value={mm.win2} active={match.pick === '2'} />
           </div>
-        </div>
+        ) : (
+          <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Sin predicciones</span>
+        )}
+        <ChevronRight size={14} className="absolute right-0" style={{ color: 'var(--text-dim)' }} />
       </div>
     </div>
   );

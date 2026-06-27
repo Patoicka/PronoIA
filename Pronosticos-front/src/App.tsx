@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Predictions } from './pages/Predictions';
-import { Stats } from './pages/Stats';
 import { Leagues } from './pages/Leagues';
 
 function App() {
@@ -12,7 +11,6 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="predictions" element={<Predictions />} />
-          <Route path="stats" element={<Stats />} />
           <Route path="leagues" element={<Leagues />} />
         </Route>
       </Routes>

@@ -26,22 +26,91 @@ export interface MultiMarkets {
   dcx2: number;
 }
 
+export interface ExtMarkets {
+  xg_home: number;
+  xg_away: number;
+  goals_home_over05: number;
+  goals_home_over15: number;
+  goals_home_over25: number;
+  goals_away_over05: number;
+  goals_away_over15: number;
+  goals_away_over25: number;
+  goals_over35: number;
+  // Cuotas estimadas goles por equipo
+  odd_gh_over05?: number;
+  odd_gh_over15?: number;
+  odd_gh_over25?: number;
+  odd_ga_over05?: number;
+  odd_ga_over15?: number;
+  odd_ga_over25?: number;
+  corners_home_avg: number;
+  corners_away_avg: number;
+  corners_total_avg: number;
+  corners_over85: number;
+  corners_over95: number;
+  corners_over105: number;
+  // Cuotas estimadas corners
+  odd_corners_over85?: number;
+  odd_corners_over95?: number;
+  odd_corners_over105?: number;
+  cards_home_avg: number;
+  cards_away_avg: number;
+  cards_total_avg: number;
+  cards_over25: number;
+  cards_over35: number;
+  cards_over45: number;
+  // Cuotas estimadas tarjetas
+  odd_cards_over25?: number;
+  odd_cards_over35?: number;
+  odd_cards_over45?: number;
+}
+
+export interface PlayerStat {
+  id: number;
+  name: string;
+  position: string;
+  nationality: string;
+  team: string;
+  team_id: number;
+  goals: number;
+  assists: number;
+  played: number;
+  goals_pg: number;
+  assists_pg: number;
+  shots_pg: number;
+  shots_ot_pg: number;
+  fouls_pg: number;
+  cards_pg: number;
+  prob_goal: number;
+  prob_shot15: number;
+  prob_shot25: number;
+  prob_card: number;
+}
+
 export interface Match {
   home: string;
   away: string;
+  homeLogo?: string;
+  awayLogo?: string;
   time: string;
   conf: number;
   pick: string;
   odds: string;
   league?: string;
   live?: boolean;
-  /** Jornada (número) desde API-Football */
   matchday?: number;
-  /** Total de jornadas de la competición (p. ej. 38) */
   totalMatchdays?: number;
-  /** ISO UTC para ordenar */
+  stage?: string;
+  stageLabel?: string;
   sortDate?: string;
+  analysis?: string;
   contextSummary?: string;
+  extMarkets?: ExtMarkets;
+  leagueId?: number;
+  oddsRaw?: { home: number; draw: number; away: number; bookmaker: string };
+  totalsRaw?: Record<string, number>;
+  bttsRaw?: Record<string, number>;
+  featuresSource?: string;
   homePred?: TeamPrediction;
   awayPred?: TeamPrediction;
   playerPreds?: PlayerPrediction[];
@@ -185,6 +254,7 @@ export const standings: Record<string, any[]> = {
 };
 
 export const leaguesList = [
+  { name:'Mundial 2026', flag:'🏆', id:'mundial-2026' },
   { name:'La Liga', flag:'🇪🇸', id:'la-liga' },
   { name:'Premier League', flag:'🏴', id:'premier-league' },
   { name:'Serie A', flag:'🇮🇹', id:'serie-a' },

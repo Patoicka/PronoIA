@@ -1,121 +1,200 @@
-import React from 'react';
-import { Trophy, BarChart3, Zap, Flame, Globe, TrendingUp } from 'lucide-react';
-import { matches, leagues, perf } from '../data/mockData';
+import React, { useState, useEffect } from 'react';
+import { Loader2, CalendarDays, Layers, Database, ArrowRight } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 import type { Match } from '../data/mockData';
+import { mapApiMatch } from '../lib/mapApiMatch';
 import { MatchCard } from '../components/ui/MatchCard';
 import { MatchModal } from '../components/ui/MatchModal';
 
+const API_ROOT = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
+
+// Muestra la primera jornada disponible
+function firstJornadaMatches(matches: Match[]): Match[] {
+  const min = Math.min(...matches.filter(m => m.matchday != null).map(m => m.matchday!));
+  return matches.filter(m => m.matchday === min);
+}
+
+function nextMatchDate(matches: Match[]): string | null {
+  const sorted = [...matches].filter(m => m.sortDate).sort((a, b) => (a.sortDate!).localeCompare(b.sortDate!));
+  const next = sorted[0];
+  if (!next?.sortDate) return null;
+  return new Date(next.sortDate).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export const Dashboard: React.FC = () => {
-  const [selectedMatch, setSelectedMatch] = React.useState<Match | null>(null);
+  const [allMatches, setAllMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [nextDate, setNextDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`${API_ROOT}/api/matches/live?league_id=39&days_ahead=90`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const raw: any[] = await res.json();
+        const mapped = raw.map(m => mapApiMatch(m, 'Premier League')).filter((m): m is Match => m !== null);
+        setAllMatches(mapped);
+        setNextDate(nextMatchDate(mapped));
+      } catch { /* falla silenciosamente en el dashboard */ }
+      finally { setLoading(false); }
+    };
+    load();
+  }, []);
+
+  const featured = firstJornadaMatches(allMatches).slice(0, 5);
+
   return (
     <section className="space-y-6">
-      <header 
-        className="fade-in rounded-2xl p-6 md:p-8 relative overflow-hidden" 
-        style={{ background: 'linear-gradient(135deg,#141414 0%,#1a1208 50%,#0f1a12 100%)', border: '1px solid #222' }}
-      >
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full" style={{ background: 'radial-gradient(circle,rgba(200,80,0,0.08),transparent 70%)' }}></div>
+      {/* Hero */}
+      <header className="fade-in rounded-2xl p-6 md:p-8 relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, var(--surface) 0%, #1a0e08 60%, var(--surface) 100%)', border: '1px solid var(--border2)' }}>
+        <div className="absolute inset-0 opacity-30"
+          style={{ background: 'radial-gradient(ellipse at 80% 50%, rgba(234,88,12,0.15), transparent 70%)' }} />
         <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="pulse-dot w-2 h-2 rounded-full inline-block" style={{ background: '#22783c' }}></span>
-            <span className="text-xs font-mono uppercase tracking-widest" style={{ color: '#22783c' }}>En vivo — 4 partidos</span>
-          </div>
-          <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight mb-2">Predicciones Deportivas</h1>
-          <p className="text-sm md:text-base" style={{ color: '#888' }}>Análisis experto con IA para tus apuestas deportivas de fútbol</p>
+          <p className="text-xs font-mono uppercase tracking-widest mb-2" style={{ color: 'var(--accent)' }}>
+            Kronos · Pronósticos en tiempo real
+          </p>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2" style={{ color: 'var(--text)' }}>
+            Predicciones con IA
+          </h1>
+          <p className="text-sm md:text-base" style={{ color: 'var(--text-muted)' }}>
+            Pronósticos automáticos de fútbol con XGBoost, Elo Rating y análisis de forma.
+          </p>
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <div className="fade-in stagger-1 rounded-xl p-4 glow-orange card-hover" style={{ background: '#141414', border: '1px solid #1e1e1e' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Trophy style={{ width: '16px', height: '16px', color: '#c85000' }} />
-            <span className="text-xs" style={{ color: '#888' }}>Aciertos</span>
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          {
+            icon: <CalendarDays size={16} style={{ color: 'var(--accent)' }} />,
+            label: 'Próximo partido',
+            value: loading ? '…' : (nextDate ?? 'Off-season'),
+            sub: 'Premier League',
+            delay: 'stagger-1',
+          },
+          {
+            icon: <Layers size={16} style={{ color: 'var(--accent)' }} />,
+            label: 'Partidos cargados',
+            value: loading ? '…' : allMatches.length,
+            sub: 'PL temporada 26/27',
+            delay: 'stagger-2',
+          },
+          {
+            icon: <Database size={16} style={{ color: 'var(--accent)' }} />,
+            label: 'Equipos con Elo',
+            value: '176',
+            sub: 'Historial 25.000 partidos',
+            delay: 'stagger-3',
+          },
+          {
+            icon: (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+              </svg>
+            ),
+            label: 'Modelos activos',
+            value: '6',
+            sub: '1X2 · Over · BTTS · DC',
+            delay: 'stagger-4',
+          },
+        ].map((c, i) => (
+          <div key={i} className={`card fade-in ${c.delay} p-4`}>
+            <div className="flex items-center gap-2 mb-3">
+              {c.icon}
+              <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{c.label}</span>
+            </div>
+            <p className="text-xl font-black truncate" style={{ color: 'var(--text)' }}>{c.value}</p>
+            <p className="text-xs mt-1 truncate" style={{ color: 'var(--text-dim)' }}>{c.sub}</p>
           </div>
-          <p className="text-2xl font-bold" style={{ color: '#c85000' }}>78%</p>
-          <p className="text-xs mt-1" style={{ color: '#555' }}>+3.2% esta semana</p>
-        </div>
-        <div className="fade-in stagger-2 rounded-xl p-4 glow-green card-hover" style={{ background: '#141414', border: '1px solid #1e1e1e' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <BarChart3 style={{ width: '16px', height: '16px', color: '#22783c' }} />
-            <span className="text-xs" style={{ color: '#888' }}>ROI Mensual</span>
-          </div>
-          <p className="text-2xl font-bold" style={{ color: '#22783c' }}>+14.5%</p>
-          <p className="text-xs mt-1" style={{ color: '#555' }}>Últimos 30 días</p>
-        </div>
-        <div className="fade-in stagger-3 rounded-xl p-4 card-hover" style={{ background: '#141414', border: '1px solid #1e1e1e' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Zap style={{ width: '16px', height: '16px', color: '#c85000' }} />
-            <span className="text-xs" style={{ color: '#888' }}>Predicciones Hoy</span>
-          </div>
-          <p className="text-2xl font-bold">12</p>
-          <p className="text-xs mt-1" style={{ color: '#555' }}>8 completadas</p>
-        </div>
-        <div className="fade-in stagger-4 rounded-xl p-4 card-hover" style={{ background: '#141414', border: '1px solid #1e1e1e' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Flame style={{ width: '16px', height: '16px', color: '#c85000' }} />
-            <span className="text-xs" style={{ color: '#888' }}>Racha Actual</span>
-          </div>
-          <p className="text-2xl font-bold">5 <span className="text-sm font-normal" style={{ color: '#22783c' }}>W</span></p>
-          <p className="text-xs mt-1" style={{ color: '#555' }}>Mejor: 11</p>
-        </div>
+        ))}
       </div>
 
+      {/* Main content */}
       <div className="grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-lg text-white m-0">Próximas Predicciones</h2>
-            <div className="flex gap-1 text-xs">
-              <button className="px-3 py-1 rounded-full font-medium" style={{ background: '#c85000', color: '#fff' }}>Todas</button>
-              <button className="px-3 py-1 rounded-full" style={{ background: '#1a1a1a', color: '#888' }}>Alta Conf.</button>
+        {/* Match list */}
+        <div className="md:col-span-2 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-bold text-base truncate" style={{ color: 'var(--text)' }}>
+              {featured[0]?.matchday ? `Jornada ${featured[0].matchday}` : 'Próximos'} · Premier League
+            </h2>
+            <NavLink
+              to="/predictions"
+              className="flex items-center gap-1 text-xs font-semibold flex-shrink-0 transition-colors hover:opacity-80"
+              style={{ color: 'var(--accent)' }}
+            >
+              <span className="hidden sm:inline">Ver todas las ligas</span>
+              <span className="sm:hidden">Ver todo</span>
+              <ArrowRight size={12} />
+            </NavLink>
+          </div>
+
+          {loading ? (
+            <div className="card p-12 flex flex-col items-center gap-3">
+              <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent)' }} />
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Cargando predicciones…</p>
             </div>
-          </div>
-          <div className="space-y-3">
-            {matches.slice(0, 4).map((m, i) => (
-              <MatchCard key={i} match={m} index={i} variant="dashboard" onClick={() => setSelectedMatch(m)} />
-            ))}
-          </div>
+          ) : featured.length > 0 ? (
+            <div className="space-y-2">
+              {featured.map((m, i) => (
+                <MatchCard key={i} match={m} index={i} onClick={() => setSelectedMatch(m)} />
+              ))}
+            </div>
+          ) : (
+            <div className="card p-8 text-center">
+              <p style={{ color: 'var(--text-muted)' }}>No hay partidos próximos disponibles.</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
+                El backend está en: {API_ROOT}
+              </p>
+            </div>
+          )}
         </div>
 
-        <div className="space-y-4">
-          <div className="fade-in stagger-4 rounded-xl p-5" style={{ background: '#141414', border: '1px solid #1e1e1e' }}>
-            <h3 className="font-bold text-sm mb-4 flex items-center gap-2 text-white">
-              <Globe style={{ width: '14px', height: '14px', color: '#c85000' }} /> Ligas Populares
+        {/* Sidebar */}
+        <div className="space-y-3">
+          {/* Ligas disponibles */}
+          <div className="card p-5">
+            <h3 className="text-sm font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--text)' }}>
+              <span style={{ color: 'var(--accent)' }}>⚽</span> Ligas disponibles
             </h3>
-            <div className="space-y-3">
-              {leagues.map((l, i) => (
-                <div key={i} className="flex items-center justify-between text-sm cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition">
+            <div className="space-y-2">
+              {[
+                { flag: '🏆', name: 'Mundial 2026', id: 1 },
+                { flag: '🏴', name: 'Premier League', id: 39 },
+                { flag: '🇪🇸', name: 'La Liga', id: 140 },
+                { flag: '🇮🇹', name: 'Serie A', id: 135 },
+                { flag: '🇩🇪', name: 'Bundesliga', id: 78 },
+                { flag: '🇫🇷', name: 'Ligue 1', id: 61 },
+              ].map(l => (
+                <NavLink
+                  key={l.id}
+                  to="/predictions"
+                  className="flex items-center justify-between text-sm px-3 py-2 rounded-xl transition-colors hover:bg-white/5"
+                >
                   <span>{l.flag} {l.name}</span>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#1a1a1a', color: '#888' }}>{l.count}</span>
-                </div>
+                  <ArrowRight size={12} style={{ color: 'var(--text-dim)' }} />
+                </NavLink>
               ))}
             </div>
           </div>
 
-          <div className="fade-in stagger-5 rounded-xl p-5" style={{ background: '#141414', border: '1px solid #1e1e1e' }}>
-            <h3 className="font-bold text-sm mb-4 flex items-center gap-2 text-white">
-              <TrendingUp style={{ width: '14px', height: '14px', color: '#22783c' }} /> Rendimiento por Liga
-            </h3>
-            <div className="space-y-3">
-              {perf.map((p, i) => (
-                <div key={i}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: '#888' }}>{p.name}</span>
-                    <span className="font-mono font-bold" style={{ color: p.pct >= 75 ? '#c85000' : '#e8e8e8' }}>{p.pct}%</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full" style={{ background: '#1e1e1e' }}>
-                    <div className="h-full rounded-full bar-fill" style={{ width: `${p.pct}%`, background: 'linear-gradient(90deg,#22783c,#c85000)' }}></div>
-                  </div>
-                </div>
+          {/* Mercados cubiertos */}
+          <div className="card p-5">
+            <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text)' }}>Mercados cubiertos</h3>
+            <div className="flex flex-wrap gap-2">
+              {['1X2', 'Más de 1.5', 'Más de 2.5', 'BTTS', 'DC 1X', 'DC X2'].map(m => (
+                <span key={m} className="text-xs px-2.5 py-1 rounded-lg font-medium"
+                  style={{ background: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
+                  {m}
+                </span>
               ))}
             </div>
           </div>
         </div>
       </div>
-      
-      <MatchModal 
-        isOpen={!!selectedMatch} 
-        onClose={() => setSelectedMatch(null)} 
-        match={selectedMatch}
-      />
+
+      <MatchModal isOpen={!!selectedMatch} onClose={() => setSelectedMatch(null)} match={selectedMatch} />
     </section>
   );
 };
