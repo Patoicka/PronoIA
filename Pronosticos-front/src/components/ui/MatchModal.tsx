@@ -1,7 +1,9 @@
-import React from 'react';
-import { X, TrendingUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, TrendingUp, Lock } from 'lucide-react';
 import { getTeamLogo } from '../../data/mockData';
 import type { Match } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import { LoginModal } from './LoginModal';
 
 const API_ROOT = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
 
@@ -64,6 +66,53 @@ const StatPill: React.FC<{ label: string; value: string | number; accent?: boole
     <span className="text-sm font-black mt-0.5" style={{ color: accent ? 'var(--accent)' : 'var(--text)' }}>{value}</span>
   </div>
 );
+
+const LockedSection: React.FC<{ children: React.ReactNode; rows?: number }> = ({ children, rows = 3 }) => {
+  const { user } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
+
+  if (user) return <>{children}</>;
+
+  return (
+    <>
+      <div className="relative rounded-xl overflow-hidden">
+        {/* Skeleton preview */}
+        <div className="p-4 space-y-3.5" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="h-2.5 rounded-full" style={{ width: `${40 + i * 12}px`, background: 'var(--border2)' }} />
+                <div className="h-2.5 rounded-full w-10" style={{ background: 'var(--border2)' }} />
+              </div>
+              <div className="h-1.5 rounded-full" style={{ background: 'var(--border2)', width: `${55 + i * 8}%` }} />
+            </div>
+          ))}
+        </div>
+        {/* Overlay */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6"
+          style={{ background: 'rgba(11,17,32,0.90)', backdropFilter: 'blur(2px)' }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)' }}>
+            <Lock size={18} style={{ color: 'var(--accent)' }} />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>Estadística exclusiva</p>
+            <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--text-muted)' }}>
+              Regístrate gratis para desbloquear todos los mercados y análisis
+            </p>
+          </div>
+          <button
+            onClick={() => setLoginOpen(true)}
+            className="px-5 py-2 rounded-xl text-sm font-bold transition hover:opacity-90"
+            style={{ background: 'var(--accent)', color: '#000' }}>
+            Regístrate gratis
+          </button>
+        </div>
+      </div>
+      <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} />
+    </>
+  );
+};
 
 const SectionTitle: React.FC<{ children: React.ReactNode; icon?: React.ReactNode }> = ({ children, icon }) => (
   <h4 className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-dim)' }}>
@@ -219,26 +268,29 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
 
               {/* Goles */}
               {mm && (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <SectionTitle>Mercado de goles</SectionTitle>
-                    {tr && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full mb-3"
-                        style={{ background: 'var(--surface2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
-                        📊 Cuotas reales
-                      </span>
-                    )}
+                <LockedSection rows={3}>
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <SectionTitle>Mercado de goles</SectionTitle>
+                      {tr && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full mb-3"
+                          style={{ background: 'var(--surface2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
+                          📊 Cuotas reales
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-2.5">
+                      <ProbBar label="Más de 1.5 goles" value={mm.over15} odd={tr?.odd_over15} />
+                      <ProbBar label="Más de 2.5 goles" value={mm.over25} odd={tr?.odd_over25} />
+                      {ext && <ProbBar label="Más de 3.5 goles" value={ext.goals_over35} odd={tr?.odd_over35} />}
+                    </div>
                   </div>
-                  <div className="space-y-2.5">
-                    <ProbBar label="Más de 1.5 goles" value={mm.over15} odd={tr?.odd_over15} />
-                    <ProbBar label="Más de 2.5 goles" value={mm.over25} odd={tr?.odd_over25} />
-                    {ext && <ProbBar label="Más de 3.5 goles" value={ext.goals_over35} odd={tr?.odd_over35} />}
-                  </div>
-                </div>
+                </LockedSection>
               )}
 
               {/* Goles por equipo */}
               {ext && (
+                <LockedSection rows={3}>
                 <div>
                   <SectionTitle>Goles por equipo</SectionTitle>
                   <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
@@ -297,11 +349,13 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                     ))}
                   </div>
                 </div>
+                </LockedSection>
               )}
 
 
               {/* Doble oportunidad */}
               {mm && (
+                <LockedSection rows={2}>
                 <div>
                   <SectionTitle>Doble oportunidad</SectionTitle>
                   <div className="space-y-2.5">
@@ -309,18 +363,21 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                     <ProbBar label={`${match.away} o Empate`} value={mm.dcx2} color="var(--success)" />
                   </div>
                 </div>
+                </LockedSection>
               )}
 
               {/* Proyecciones comparativas */}
               {match.homePred && match.awayPred && (
-                <div>
-                  <SectionTitle>Proyecciones IA</SectionTitle>
-                  <div className="space-y-3">
-                    <CompareRow label="xG" left={match.homePred.expectedGoals} right={match.awayPred.expectedGoals} format={v => v.toFixed(1)} />
-                    <CompareRow label="Posesión" left={match.homePred.possession} right={match.awayPred.possession} format={v => `${v}%`} />
-                    <CompareRow label="Tiros" left={match.homePred.shots} right={match.awayPred.shots} format={v => `${v}`} />
+                <LockedSection rows={3}>
+                  <div>
+                    <SectionTitle>Proyecciones IA</SectionTitle>
+                    <div className="space-y-3">
+                      <CompareRow label="xG" left={match.homePred.expectedGoals} right={match.awayPred.expectedGoals} format={v => v.toFixed(1)} />
+                      <CompareRow label="Posesión" left={match.homePred.possession} right={match.awayPred.possession} format={v => `${v}%`} />
+                      <CompareRow label="Tiros" left={match.homePred.shots} right={match.awayPred.shots} format={v => `${v}`} />
+                    </div>
                   </div>
-                </div>
+                </LockedSection>
               )}
 
               {/* Apuestas sugeridas */}
@@ -343,6 +400,7 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                 if (!top.length) return null;
 
                 return (
+                  <LockedSection rows={3}>
                   <div>
                     <SectionTitle>Apuestas sugeridas</SectionTitle>
                     <div className="space-y-2">
@@ -370,6 +428,7 @@ export const MatchModal: React.FC<MatchModalProps> = ({ isOpen, onClose, match }
                       })}
                     </div>
                   </div>
+                  </LockedSection>
                 );
               })()}
 
