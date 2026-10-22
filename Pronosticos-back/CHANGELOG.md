@@ -2,6 +2,18 @@
 
 Todas las mejoras notables de la Inteligencia Artificial y la API se documentarán en este archivo.
 
+## [V3.2] - Secrets y CORS desde entorno
+### Cambiado (Changed)
+- **DATABASE_URL**: ya no hay password de Postgres hardcodeada en `database.py`; se lee de `.env`.
+- **SECRET_KEY**: obligatorio vía entorno (sin default de producción en `auth.py`).
+- **CORS**: `CORS_ORIGINS` (lista separada por comas); default local Vite, sin `*`.
+- **docker-compose**: credenciales desde variables / `.env`.
+- **Registro / cambio de contraseña**: mínimo 8 caracteres.
+
+### Agregado (Added)
+- **`.env.example`**: plantilla sin secretos reales.
+- **DB dump docs**: aviso explícito de no commitear passwords ni `.env`.
+
 ## [V3.1] - Diagnóstico de API-Football y temporada actual
 ### Agregado (Added)
 - **Endpoint de salud**: Se agregó `/api/health` para confirmar qué `main.py`, carpeta de trabajo y rutas está ejecutando realmente FastAPI.

@@ -15,37 +15,45 @@ from database import get_db
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "kronos-secret-change-in-production")
-ALGORITHM  = "HS256"
+MIN_PASSWORD_LENGTH = 8
+
+_secret = os.getenv("SECRET_KEY", "").strip()
+if not _secret:
+    raise RuntimeError(
+        "SECRET_KEY no está definida. Copia Pronosticos-back/.env.example a .env "
+        "y define un SECRET_KEY fuerte (sin defaults de producción)."
+    )
+SECRET_KEY = _secret
+ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
-router  = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 _bearer = HTTPBearer()
 
 
 # ---------- Schemas ----------
 
 class RegisterRequest(BaseModel):
-    nombres:          str
-    apellidos:        str
+    nombres: str
+    apellidos: str
     fecha_nacimiento: Optional[date] = None
-    correo:           EmailStr
-    telefono:         Optional[str] = None
-    password:         str
+    correo: EmailStr
+    telefono: Optional[str] = None
+    password: str
 
 class LoginRequest(BaseModel):
-    correo:   EmailStr
+    correo: EmailStr
     password: str
 
 class UpdateProfileRequest(BaseModel):
-    nombres:          str
-    apellidos:        str
+    nombres: str
+    apellidos: str
     fecha_nacimiento: Optional[date] = None
-    telefono:         Optional[str]  = None
+    telefono: Optional[str] = None
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password:     str
+    new_password: str
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -68,8 +76,17 @@ def _create_token(data: dict) -> str:
 
 # ---------- Endpoints ----------
 
+def _ensure_password_strength(password: str) -> None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres",
+        )
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
+    _ensure_password_strength(body.password)
     if db.query(models.User).filter(models.User.correo == body.correo).first():
         raise HTTPException(status_code=409, detail="El correo ya está registrado")
 
@@ -142,6 +159,7 @@ def change_password(
 ):
     if not _verify(body.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta")
+    _ensure_password_strength(body.new_password)
     current_user.hashed_password = _hash(body.new_password)
     db.commit()
     return {"detail": "Contraseña actualizada"}
