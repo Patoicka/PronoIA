@@ -19,7 +19,10 @@ export const Navbar: React.FC = () => {
   const dropRef = useRef<HTMLDivElement>(null);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `text-sm font-semibold transition-colors ${isActive ? 'text-[var(--accent)]' : 'text-[#888] hover:text-[#f5f5f5]'}`;
+    `nav-link ${isActive ? 'nav-link-active' : ''}`;
+
+  const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `nav-link-mobile ${isActive ? 'nav-link-mobile-active' : ''}`;
 
   const initials = user
     ? `${user.nombres[0] ?? ''}${user.apellidos[0] ?? ''}`.toUpperCase()
@@ -29,22 +32,21 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-      <nav className="sticky top-0 z-40 px-5 md:px-8"
-        style={{ background: 'rgba(8,8,8,0.9)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)' }}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between h-14">
+      <nav className="nav-shell">
+        <div className="nav-inner">
 
-          {/* Logo */}
+          {/* Logo — marca Kronos (peso display, no font-black genérico) */}
           <NavLink to="/" className="flex items-center gap-2.5 group">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain" />
+            <div className="w-9 h-9 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <img src="/logo.png" alt="Kronos" className="w-9 h-9 object-contain" />
             </div>
-            <span className="text-base font-black tracking-tight" style={{ color: 'var(--text)' }}>
+            <span className="text-brand text-base">
               Kronos
             </span>
           </NavLink>
 
           {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-5">
             {NAV_LINKS.map(l => (
               <NavLink key={l.to} to={l.to} end={l.end} className={linkClass}>
                 {l.label}
@@ -55,14 +57,15 @@ export const Navbar: React.FC = () => {
           {/* Right actions */}
           <div className="flex items-center gap-2">
             {user ? (
-              /* Usuario logueado */
               <div className="relative" ref={dropRef}>
                 <button
                   onClick={() => setDropOpen(v => !v)}
-                  className="hidden md:flex items-center gap-2 px-2 py-1.5 rounded-xl transition-colors hover:bg-white/5"
+                  className="hidden md:flex items-center gap-2 px-2 py-1.5 rounded-[var(--radius-md)] transition-colors hover:bg-white/[0.04]"
                 >
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0"
-                    style={{ background: 'var(--accent)', color: '#000' }}>
+                  <div
+                    className="w-7 h-7 rounded-[var(--radius-sm)] flex items-center justify-center text-xs font-bold flex-shrink-0 text-mono"
+                    style={{ background: 'var(--accent)', color: 'var(--accent-fg)' }}
+                  >
                     {initials}
                   </div>
                   <span className="text-sm font-semibold max-w-[100px] truncate" style={{ color: 'var(--text)' }}>
@@ -73,21 +76,27 @@ export const Navbar: React.FC = () => {
                 </button>
 
                 {dropOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-48 rounded-xl overflow-hidden shadow-xl"
-                    style={{ background: 'var(--surface)', border: '1px solid var(--border2)' }}>
+                  <div
+                    className="absolute right-0 top-full mt-2 w-48 overflow-hidden shadow-xl"
+                    style={{
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border2)',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  >
                     <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-                      <p className="text-xs font-bold truncate" style={{ color: 'var(--text)' }}>
+                      <p className="text-meta truncate" style={{ color: 'var(--text)', fontWeight: 700 }}>
                         {user.nombres} {user.apellidos}
                       </p>
-                      <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{user.correo}</p>
+                      <p className="text-meta truncate">{user.correo}</p>
                     </div>
                     <button onClick={() => { setDropOpen(false); navigate('/profile'); }}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition hover:bg-white/5"
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition hover:bg-white/[0.04]"
                       style={{ color: 'var(--text-muted)' }}>
                       <User size={14} /> Mi perfil
                     </button>
                     <button onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition hover:bg-white/5"
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition hover:bg-white/[0.04]"
                       style={{ color: 'var(--danger)' }}>
                       <LogOut size={14} /> Cerrar sesión
                     </button>
@@ -95,16 +104,19 @@ export const Navbar: React.FC = () => {
                 )}
               </div>
             ) : (
-              /* No logueado */
               <button onClick={() => setLoginOpen(true)}
-                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
-                style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 text-sm font-semibold transition-colors"
+                style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-muted)',
+                  borderRadius: 'var(--radius-sm)',
+                }}>
                 Iniciar sesión
               </button>
             )}
 
-            {/* Mobile hamburger */}
-            <button className="md:hidden p-2 rounded-lg transition-colors"
+            <button className="md:hidden p-2 rounded-[var(--radius-sm)] transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onClick={() => setMenuOpen(v => !v)} aria-label="Menú">
               {menuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -112,33 +124,28 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* Mobile menu */}
         {menuOpen && (
-          <div className="md:hidden pb-4 pt-2 space-y-1" onClick={() => setMenuOpen(false)}>
+          <div className="md:hidden pb-3 pt-1 space-y-0.5" onClick={() => setMenuOpen(false)}>
             {NAV_LINKS.map(l => (
-              <NavLink key={l.to} to={l.to} end={l.end}
-                className={({ isActive }) =>
-                  `block px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${isActive
-                    ? 'bg-[var(--accent-bg)] text-[var(--accent)]'
-                    : 'text-[#888] hover:text-[#f5f5f5] hover:bg-white/5'}`}>
+              <NavLink key={l.to} to={l.to} end={l.end} className={mobileLinkClass}>
                 {l.label}
               </NavLink>
             ))}
             {user ? (
               <>
                 <button onClick={() => { setMenuOpen(false); navigate('/profile'); }}
-                  className="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-colors text-[#888] hover:text-[#f5f5f5] hover:bg-white/5">
+                  className="nav-link-mobile w-full text-left">
                   Mi perfil
                 </button>
                 <button onClick={() => { setMenuOpen(false); handleLogout(); }}
-                  className="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-colors hover:bg-white/5"
+                  className="nav-link-mobile w-full text-left"
                   style={{ color: 'var(--danger)' }}>
                   Cerrar sesión
                 </button>
               </>
             ) : (
               <button onClick={() => { setMenuOpen(false); setLoginOpen(true); }}
-                className="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-colors text-[#888] hover:text-[#f5f5f5] hover:bg-white/5">
+                className="nav-link-mobile w-full text-left">
                 Iniciar sesión
               </button>
             )}
