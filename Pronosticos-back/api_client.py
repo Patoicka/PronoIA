@@ -1,12 +1,23 @@
 import os
-import requests
+import time
 from datetime import datetime, timedelta, timezone
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
 FOOTBALL_DATA_TOKEN = os.getenv("FOOTBALL_DATA_TOKEN", "")
+
+# Ventana y caché de fixtures (PR 2 del plan)
+DEFAULT_DAYS_AHEAD = 35
+MAX_DAYS_AHEAD = 45
+# TTL 5–15 min; default 10 min. Override: FIXTURES_CACHE_TTL (segundos).
+_raw_ttl = int(os.getenv("FIXTURES_CACHE_TTL", "600"))
+FIXTURES_CACHE_TTL = max(300, min(_raw_ttl, 900))
+
+UPCOMING_STATUSES = frozenset({"SCHEDULED", "TIMED", "IN_PLAY", "PAUSED"})
 
 LEAGUE_ID_TO_CODE = {
     1:   "WC",   # FIFA World Cup 2026
@@ -52,52 +63,148 @@ STATUS_MAP = {
     "CANCELLED": "CANC",
 }
 
+# Caché en memoria: key=(league_id, days_ahead) → (expires_at, matches)
+_fixtures_cache: dict[tuple[int, int], tuple[float, list[dict]]] = {}
+_fixtures_cache_stats: dict = {
+    "hits": 0,
+    "misses": 0,
+    "entries": 0,
+}
+_last_fetch_meta: dict = {
+    "cache_hit": False,
+    "league_id": None,
+    "days_ahead": None,
+    "ttl_seconds": FIXTURES_CACHE_TTL,
+    "match_count": 0,
+    "upstream_calls": 0,
+}
+
+
+def clamp_days_ahead(days_ahead: int) -> int:
+    """Limita la ventana a [1, MAX_DAYS_AHEAD] (default de producto = 35)."""
+    try:
+        value = int(days_ahead)
+    except (TypeError, ValueError):
+        value = DEFAULT_DAYS_AHEAD
+    return max(1, min(value, MAX_DAYS_AHEAD))
+
+
+def get_fixtures_cache_info() -> dict:
+    """Resumen para /api/health."""
+    now = time.time()
+    alive = sum(1 for exp, _ in _fixtures_cache.values() if exp > now)
+    return {
+        "ttl_seconds": FIXTURES_CACHE_TTL,
+        "default_days_ahead": DEFAULT_DAYS_AHEAD,
+        "max_days_ahead": MAX_DAYS_AHEAD,
+        "entries": alive,
+        "hits": _fixtures_cache_stats["hits"],
+        "misses": _fixtures_cache_stats["misses"],
+        "last_fetch": dict(_last_fetch_meta),
+    }
+
+
+def get_last_fixtures_fetch_meta() -> dict:
+    return dict(_last_fetch_meta)
+
 
 def _headers() -> dict:
     return {"X-Auth-Token": FOOTBALL_DATA_TOKEN}
 
 
-def fetch_upcoming_matches(league_id: int, days_ahead: int = 35) -> list[dict]:
-    """Obtiene partidos programados + en vivo para la competición indicada."""
+def _fetch_upcoming_from_api(league_id: int, days_ahead: int) -> tuple[list[dict], int]:
+    """
+    Una sola llamada a football-data (rango de fechas, sin filtrar status en query).
+    Filtra en cliente SCHEDULED/TIMED/IN_PLAY/PAUSED — evita 4 requests por refresh.
+    """
     code = LEAGUE_ID_TO_CODE.get(league_id)
     if not code:
-        return []
+        return [], 0
 
     now = datetime.now(timezone.utc)
     date_from = now.strftime("%Y-%m-%d")
     date_to = (now + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
-    all_matches: list[dict] = []
+    url = f"{FOOTBALL_DATA_BASE}/competitions/{code}/matches"
+    params = {"dateFrom": date_from, "dateTo": date_to}
+    upstream_calls = 0
 
-    for status in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED"):
-        url = f"{FOOTBALL_DATA_BASE}/competitions/{code}/matches"
-        params = {"status": status, "dateFrom": date_from, "dateTo": date_to}
-        try:
-            resp = requests.get(url, headers=_headers(), params=params, timeout=20)
-            if resp.status_code == 401:
-                print("[football-data.org] Token inválido (401) — verifica FOOTBALL_DATA_TOKEN en .env")
-                break
-            if resp.status_code == 403:
-                print(f"[football-data.org] Acceso denegado (403) para {code} — la competición puede requerir un plan superior")
-                break
-            if resp.status_code == 429:
-                print("[football-data.org] Rate limit excedido (429) — espera un minuto")
-                break
-            resp.raise_for_status()
-            all_matches.extend(resp.json().get("matches", []))
-        except requests.RequestException as e:
-            print(f"[football-data.org] Error al obtener {status} para {code}: {e}")
+    try:
+        resp = requests.get(url, headers=_headers(), params=params, timeout=20)
+        upstream_calls = 1
+        if resp.status_code == 401:
+            print("[football-data.org] Token inválido (401) — verifica FOOTBALL_DATA_TOKEN en .env")
+            return [], upstream_calls
+        if resp.status_code == 403:
+            print(
+                f"[football-data.org] Acceso denegado (403) para {code} — "
+                "la competición puede requerir un plan superior"
+            )
+            return [], upstream_calls
+        if resp.status_code == 429:
+            print("[football-data.org] Rate limit excedido (429) — espera un minuto")
+            return [], upstream_calls
+        resp.raise_for_status()
+        raw_list = resp.json().get("matches", [])
+    except requests.RequestException as e:
+        print(f"[football-data.org] Error al obtener partidos para {code}: {e}")
+        return [], upstream_calls
 
-    # Deduplicar
+    all_matches = [m for m in raw_list if m.get("status") in UPCOMING_STATUSES]
+
     seen: set = set()
     unique: list[dict] = []
     for m in all_matches:
-        if m["id"] not in seen:
-            seen.add(m["id"])
-            unique.append(m)
+        mid = m.get("id")
+        if mid is None or mid in seen:
+            continue
+        seen.add(mid)
+        unique.append(m)
 
     unique.sort(key=lambda m: (m.get("matchday") or 9999, m.get("utcDate") or ""))
-    return unique
+    return unique, upstream_calls
+
+
+def fetch_upcoming_matches(league_id: int, days_ahead: int = DEFAULT_DAYS_AHEAD) -> list[dict]:
+    """
+    Próximos partidos (programados + en vivo) con caché en memoria
+    keyed por (league_id, days_ahead).
+    """
+    days_ahead = clamp_days_ahead(days_ahead)
+    key = (int(league_id), days_ahead)
+    now = time.time()
+
+    cached = _fixtures_cache.get(key)
+    if cached and cached[0] > now:
+        matches = cached[1]
+        _fixtures_cache_stats["hits"] += 1
+        _last_fetch_meta.update(
+            {
+                "cache_hit": True,
+                "league_id": league_id,
+                "days_ahead": days_ahead,
+                "ttl_seconds": FIXTURES_CACHE_TTL,
+                "match_count": len(matches),
+                "upstream_calls": 0,
+            }
+        )
+        return list(matches)
+
+    matches, upstream_calls = _fetch_upcoming_from_api(league_id, days_ahead)
+    _fixtures_cache[key] = (now + FIXTURES_CACHE_TTL, matches)
+    _fixtures_cache_stats["misses"] += 1
+    _fixtures_cache_stats["entries"] = len(_fixtures_cache)
+    _last_fetch_meta.update(
+        {
+            "cache_hit": False,
+            "league_id": league_id,
+            "days_ahead": days_ahead,
+            "ttl_seconds": FIXTURES_CACHE_TTL,
+            "match_count": len(matches),
+            "upstream_calls": upstream_calls,
+        }
+    )
+    return list(matches)
 
 
 def get_total_rounds(league_id: int) -> int:

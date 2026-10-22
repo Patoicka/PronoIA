@@ -2,6 +2,16 @@
 
 Todas las mejoras notables de la Inteligencia Artificial y la API se documentarán en este archivo.
 
+## [V3.3] - Caché de fixtures football-data
+### Agregado (Added)
+- **Caché en memoria** de fixtures keyed por `(league_id, days_ahead)` con TTL 5–15 min (`FIXTURES_CACHE_TTL`, default 600s).
+- **Headers** en `/api/matches/live`: `X-Fixtures-Cache` (HIT/MISS), `X-Fixtures-Cache-TTL`, `X-Fixtures-Days-Ahead`, `X-Fixtures-Upstream-Calls`.
+- **`/api/health`**: bloque `fixtures_cache` (hits/misses/entries/last_fetch).
+
+### Cambiado (Changed)
+- **Una sola llamada** a football-data por miss (filtro de status en cliente) en lugar de 4 requests por status.
+- **`days_ahead`**: default 35, tope `MAX_DAYS_AHEAD=45` (ignora ventanas tipo 90 del cliente).
+
 ## [V3.2] - Secrets y CORS desde entorno
 ### Cambiado (Changed)
 - **DATABASE_URL**: ya no hay password de Postgres hardcodeada en `database.py`; se lee de `.env`.
@@ -13,6 +23,7 @@ Todas las mejoras notables de la Inteligencia Artificial y la API se documentar�
 ### Agregado (Added)
 - **`.env.example`**: plantilla sin secretos reales.
 - **DB dump docs**: aviso explícito de no commitear passwords ni `.env`.
+
 
 ## [V3.1] - Diagnóstico de API-Football y temporada actual
 ### Agregado (Added)

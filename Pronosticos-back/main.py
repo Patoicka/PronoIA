@@ -17,7 +17,12 @@ from sqlalchemy.orm import Session
 
 import models
 from api_client import (
+    DEFAULT_DAYS_AHEAD,
+    MAX_DAYS_AHEAD,
+    clamp_days_ahead,
     fetch_upcoming_matches,
+    get_fixtures_cache_info,
+    get_last_fixtures_fetch_meta,
     get_total_rounds,
     normalize_match,
     LEAGUE_ID_TO_CODE,
@@ -781,6 +786,10 @@ app.add_middleware(
         "X-Matches-Raw-Count",
         "X-Matches-Returned",
         "X-Team-State-Loaded",
+        "X-Fixtures-Cache",
+        "X-Fixtures-Cache-TTL",
+        "X-Fixtures-Days-Ahead",
+        "X-Fixtures-Upstream-Calls",
     ],
 )
 
@@ -804,6 +813,7 @@ def api_health():
         "cwd": os.getcwd(),
         "team_state_equipos": len(_team_state),
         "modelos_cargados": list(models_dict.keys()),
+        "fixtures_cache": get_fixtures_cache_info(),
         "api_routes": [p for p in paths if p.startswith("/api")],
     }
 
@@ -863,12 +873,28 @@ def predict_match(match_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/matches/live")
-def get_live_matches(response: Response, league_id: int = 140, days_ahead: int = 35):
+def get_live_matches(
+    response: Response,
+    league_id: int = 140,
+    days_ahead: int = DEFAULT_DAYS_AHEAD,
+):
     """Próximos partidos desde football-data.org con predicciones AI reales."""
+    days_ahead = clamp_days_ahead(days_ahead)
     raw_matches = fetch_upcoming_matches(league_id, days_ahead)
+    fetch_meta = get_last_fixtures_fetch_meta()
+    response.headers["X-Fixtures-Cache"] = "HIT" if fetch_meta.get("cache_hit") else "MISS"
+    response.headers["X-Fixtures-Cache-TTL"] = str(fetch_meta.get("ttl_seconds", ""))
+    response.headers["X-Fixtures-Days-Ahead"] = str(fetch_meta.get("days_ahead", days_ahead))
+    response.headers["X-Fixtures-Upstream-Calls"] = str(fetch_meta.get("upstream_calls", 0))
 
     if not raw_matches:
-        logger.info("[matches/live] league_id=%s sin partidos en los próximos %s días (off-season o no publicados)", league_id, days_ahead)
+        logger.info(
+            "[matches/live] league_id=%s sin partidos en los próximos %s días "
+            "(off-season o no publicados) cache=%s",
+            league_id,
+            days_ahead,
+            response.headers["X-Fixtures-Cache"],
+        )
         return []
 
     total_jornadas = get_total_rounds(league_id)
@@ -1013,11 +1039,11 @@ def get_live_matches(response: Response, league_id: int = 140, days_ahead: int =
 
 
 @app.get("/api/debug/matches-live")
-def debug_matches_live(league_id: int = 140, days_ahead: int = 35):
-    """Diagnóstico: muestra qué devuelve football-data.org sin procesamiento AI."""
-    from api_client import LEAGUE_ID_TO_CODE, _headers, FOOTBALL_DATA_BASE
-    from datetime import datetime, timedelta, timezone
+def debug_matches_live(league_id: int = 140, days_ahead: int = DEFAULT_DAYS_AHEAD):
+    """Diagnóstico: muestra qué devolvería el path cacheado (1 call upstream en miss)."""
+    from api_client import LEAGUE_ID_TO_CODE, UPCOMING_STATUSES, _headers, FOOTBALL_DATA_BASE
 
+    days_ahead = clamp_days_ahead(days_ahead)
     code = LEAGUE_ID_TO_CODE.get(league_id)
     now = datetime.now(timezone.utc)
     date_from = now.strftime("%Y-%m-%d")
@@ -1025,37 +1051,51 @@ def debug_matches_live(league_id: int = 140, days_ahead: int = 35):
 
     sample = []
     errors = []
+    upstream_calls = 0
 
-    for status in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED"):
-        url = f"{FOOTBALL_DATA_BASE}/competitions/{code}/matches"
-        params = {"status": status, "dateFrom": date_from, "dateTo": date_to}
-        try:
-            resp = requests.get(url, headers=_headers(), params=params, timeout=20)
-            resp.raise_for_status()
-            matches = resp.json().get("matches", [])
-            for m in matches[:3]:
-                sample.append(
-                    {
-                        "id": m.get("id"),
-                        "status": m.get("status"),
-                        "matchday": m.get("matchday"),
-                        "utcDate": m.get("utcDate"),
-                        "home": (m.get("homeTeam") or {}).get("name"),
-                        "away": (m.get("awayTeam") or {}).get("name"),
-                    }
-                )
-        except Exception as e:
-            errors.append({"status_filter": status, "error": str(e)})
+    url = f"{FOOTBALL_DATA_BASE}/competitions/{code}/matches"
+    params = {"dateFrom": date_from, "dateTo": date_to}
+    try:
+        resp = requests.get(url, headers=_headers(), params=params, timeout=20)
+        upstream_calls = 1
+        resp.raise_for_status()
+        matches = [
+            m for m in resp.json().get("matches", [])
+            if m.get("status") in UPCOMING_STATUSES
+        ]
+        for m in matches[:10]:
+            sample.append(
+                {
+                    "id": m.get("id"),
+                    "status": m.get("status"),
+                    "matchday": m.get("matchday"),
+                    "utcDate": m.get("utcDate"),
+                    "home": (m.get("homeTeam") or {}).get("name"),
+                    "away": (m.get("awayTeam") or {}).get("name"),
+                }
+            )
+    except Exception as e:
+        errors.append({"error": str(e)})
+
+    # También ejercita la caché de producto (HIT en segunda llamada al debug+live)
+    cached_preview = fetch_upcoming_matches(league_id, days_ahead)
+    fetch_meta = get_last_fixtures_fetch_meta()
 
     return {
         "competition_code": code,
         "league_id": league_id,
         "date_from": date_from,
         "date_to": date_to,
+        "days_ahead": days_ahead,
+        "max_days_ahead": MAX_DAYS_AHEAD,
+        "upstream_calls_debug": upstream_calls,
+        "fixtures_fetch_meta": fetch_meta,
+        "cached_match_count": len(cached_preview),
         "team_state_equipos": len(_team_state),
         "modelos_cargados": list(models_dict.keys()),
         "sample_matches": sample[:10],
         "errors": errors,
+        "fixtures_cache": get_fixtures_cache_info(),
     }
 
 
