@@ -6,7 +6,7 @@ export const Layout: React.FC = () => {
   return (
     <div id="app" className="h-full w-full overflow-auto">
       <Navbar />
-      <div className="max-w-7xl mx-auto px-5 md:px-8 py-6 space-y-6">
+      <div className="page-shell">
         <Outlet />
       </div>
     </div>

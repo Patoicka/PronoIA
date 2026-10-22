@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, CalendarDays, Layers, Database, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowRight } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import type { Match } from '../data/mockData';
 import { mapApiMatch } from '../lib/mapApiMatch';
@@ -7,191 +7,197 @@ import { MatchCard } from '../components/ui/MatchCard';
 import { MatchModal } from '../components/ui/MatchModal';
 
 const API_ROOT = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
+const HOME_LEAGUE = 'Premier League';
+const HOME_LEAGUE_ID = 39;
 
-// Muestra la primera jornada disponible
 function firstJornadaMatches(matches: Match[]): Match[] {
-  const min = Math.min(...matches.filter(m => m.matchday != null).map(m => m.matchday!));
-  return matches.filter(m => m.matchday === min);
+  const withDay = matches.filter(m => m.matchday != null);
+  if (!withDay.length) return matches.slice(0, 5);
+  const min = Math.min(...withDay.map(m => m.matchday!));
+  return matches.filter(m => m.matchday === min).slice(0, 5);
 }
 
 function nextMatchDate(matches: Match[]): string | null {
-  const sorted = [...matches].filter(m => m.sortDate).sort((a, b) => (a.sortDate!).localeCompare(b.sortDate!));
+  const sorted = [...matches]
+    .filter(m => m.sortDate)
+    .sort((a, b) => (a.sortDate!).localeCompare(b.sortDate!));
   const next = sorted[0];
   if (!next?.sortDate) return null;
-  return new Date(next.sortDate).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(next.sortDate).toLocaleDateString('es', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
 }
 
 export const Dashboard: React.FC = () => {
   const [allMatches, setAllMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
-  const [nextDate, setNextDate] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const res = await fetch(`${API_ROOT}/api/matches/live?league_id=39&days_ahead=90`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const raw: any[] = await res.json();
-        const mapped = raw.map(m => mapApiMatch(m, 'Premier League')).filter((m): m is Match => m !== null);
+        const res = await fetch(
+          `${API_ROOT}/api/matches/live?league_id=${HOME_LEAGUE_ID}&days_ahead=45`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(
+            typeof body?.detail === 'string' ? body.detail : `Error ${res.status} al cargar partidos`,
+          );
+        }
+        const raw: unknown[] = await res.json();
+        if (cancelled) return;
+        const mapped = raw
+          .map(m => mapApiMatch(m, HOME_LEAGUE))
+          .filter((m): m is Match => m !== null);
         setAllMatches(mapped);
-        setNextDate(nextMatchDate(mapped));
-      } catch { /* falla silenciosamente en el dashboard */ }
-      finally { setLoading(false); }
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setAllMatches([]);
+        setError(e instanceof Error ? e.message : 'No se pudo conectar con el servidor');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
     load();
+    return () => { cancelled = true; };
   }, []);
 
-  const featured = firstJornadaMatches(allMatches).slice(0, 5);
+  const featured = firstJornadaMatches(allMatches);
+  const nextDate = nextMatchDate(allMatches);
+  const jornadaLabel = featured[0]?.matchday
+    ? `Jornada ${featured[0].matchday}`
+    : 'Próximos partidos';
 
   return (
-    <section className="space-y-6">
-      {/* Hero */}
-      <header className="fade-in rounded-2xl p-6 md:p-8 relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, var(--surface) 0%, #1a0e08 60%, var(--surface) 100%)', border: '1px solid var(--border2)' }}>
-        <div className="absolute inset-0 opacity-30"
-          style={{ background: 'radial-gradient(ellipse at 80% 50%, rgba(234,88,12,0.15), transparent 70%)' }} />
-        <div className="relative z-10">
-          <p className="text-xs font-mono uppercase tracking-widest mb-2" style={{ color: 'var(--accent)' }}>
-            Kronos · Pronósticos en tiempo real
-          </p>
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2" style={{ color: 'var(--text)' }}>
-            Predicciones con IA
-          </h1>
-          <p className="text-sm md:text-base" style={{ color: 'var(--text-muted)' }}>
-            Pronósticos automáticos de fútbol con XGBoost, Elo Rating y análisis de forma.
-          </p>
+    <section className="stack-dense" style={{ gap: 'var(--space-section)' }}>
+      {/* Hero — una composición: marca + promesa + CTA (sin KPI / pills) */}
+      <header className="fade-in relative overflow-hidden -mx-[var(--space-page-x)] md:-mx-[var(--space-page-x-md)] px-[var(--space-page-x)] md:px-[var(--space-page-x-md)] py-8 md:py-10"
+        style={{
+          borderBottom: '1px solid var(--border)',
+          background:
+            'radial-gradient(ellipse 80% 70% at 70% 40%, rgba(245,158,11,0.10), transparent 55%)',
+        }}
+      >
+        <p className="text-brand text-display mb-3">Kronos</p>
+        <h1 className="text-title mb-2" style={{ fontSize: '1.25rem', maxWidth: '28rem' }}>
+          Pronósticos de fútbol con señal clara
+        </h1>
+        <p className="text-body mb-5" style={{ color: 'var(--text-muted)', maxWidth: '28rem' }}>
+          Probabilidades multi-mercado con Elo y modelos entrenados — para decidir con datos, no con ruido.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <NavLink
+            to="/predictions"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors"
+            style={{
+              background: 'var(--accent)',
+              color: 'var(--accent-fg)',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            Ver predicciones
+            <ArrowRight size={16} />
+          </NavLink>
+          <span className="text-meta text-mono" style={{ color: 'var(--text-dim)' }}>
+            {loading
+              ? 'Cargando…'
+              : error
+                ? 'Sin datos en vivo'
+                : nextDate
+                  ? `Próximo · ${nextDate} · ${HOME_LEAGUE}`
+                  : `${HOME_LEAGUE} · sin partidos próximos`}
+          </span>
         </div>
       </header>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          {
-            icon: <CalendarDays size={16} style={{ color: 'var(--accent)' }} />,
-            label: 'Próximo partido',
-            value: loading ? '…' : (nextDate ?? 'Off-season'),
-            sub: 'Premier League',
-            delay: 'stagger-1',
-          },
-          {
-            icon: <Layers size={16} style={{ color: 'var(--accent)' }} />,
-            label: 'Partidos cargados',
-            value: loading ? '…' : allMatches.length,
-            sub: 'PL temporada 26/27',
-            delay: 'stagger-2',
-          },
-          {
-            icon: <Database size={16} style={{ color: 'var(--accent)' }} />,
-            label: 'Equipos con Elo',
-            value: '176',
-            sub: 'Historial 25.000 partidos',
-            delay: 'stagger-3',
-          },
-          {
-            icon: (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-              </svg>
-            ),
-            label: 'Modelos activos',
-            value: '6',
-            sub: '1X2 · Over · BTTS · DC',
-            delay: 'stagger-4',
-          },
-        ].map((c, i) => (
-          <div key={i} className={`card fade-in ${c.delay} p-4`}>
-            <div className="flex items-center gap-2 mb-3">
-              {c.icon}
-              <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{c.label}</span>
-            </div>
-            <p className="text-xl font-black truncate" style={{ color: 'var(--text)' }}>{c.value}</p>
-            <p className="text-xs mt-1 truncate" style={{ color: 'var(--text-dim)' }}>{c.sub}</p>
+      {/* Lista densa — sin sidebar de relleno */}
+      <div className="fade-in stagger-1 stack-dense">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-title">{jornadaLabel}</h2>
+            <p className="text-meta mt-0.5">{HOME_LEAGUE}</p>
           </div>
-        ))}
-      </div>
+          <NavLink
+            to="/predictions"
+            className="inline-flex items-center gap-1 text-meta font-semibold flex-shrink-0 transition-opacity hover:opacity-80"
+            style={{ color: 'var(--accent)' }}
+          >
+            Todas las ligas
+            <ArrowRight size={12} />
+          </NavLink>
+        </div>
 
-      {/* Main content */}
-      <div className="grid md:grid-cols-3 gap-4">
-        {/* Match list */}
-        <div className="md:col-span-2 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-bold text-base truncate" style={{ color: 'var(--text)' }}>
-              {featured[0]?.matchday ? `Jornada ${featured[0].matchday}` : 'Próximos'} · Premier League
-            </h2>
+        {loading && (
+          <div
+            className="flex flex-col items-center justify-center gap-3 py-10"
+            style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}
+          >
+            <Loader2 size={24} className="animate-spin" style={{ color: 'var(--accent)' }} />
+            <p className="text-meta">Cargando predicciones…</p>
+          </div>
+        )}
+
+        {!loading && error && (
+          <div
+            className="px-4 py-5"
+            style={{
+              border: '1px solid var(--border2)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--surface)',
+            }}
+          >
+            <p className="text-title" style={{ fontSize: '0.95rem', marginBottom: '0.35rem' }}>
+              No se pudieron cargar los partidos
+            </p>
+            <p className="text-meta" style={{ color: 'var(--text-muted)' }}>{error}</p>
+            <p className="text-meta text-mono mt-2" style={{ color: 'var(--text-dim)' }}>
+              API · {API_ROOT}
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && featured.length === 0 && (
+          <div
+            className="px-4 py-8 text-center"
+            style={{
+              border: '1px dashed var(--border2)',
+              borderRadius: 'var(--radius-md)',
+            }}
+          >
+            <p className="text-body" style={{ color: 'var(--text-muted)' }}>
+              No hay partidos próximos en {HOME_LEAGUE}.
+            </p>
             <NavLink
               to="/predictions"
-              className="flex items-center gap-1 text-xs font-semibold flex-shrink-0 transition-colors hover:opacity-80"
+              className="inline-flex items-center gap-1 mt-3 text-sm font-semibold"
               style={{ color: 'var(--accent)' }}
             >
-              <span className="hidden sm:inline">Ver todas las ligas</span>
-              <span className="sm:hidden">Ver todo</span>
-              <ArrowRight size={12} />
+              Explorar otras ligas
+              <ArrowRight size={14} />
             </NavLink>
           </div>
+        )}
 
-          {loading ? (
-            <div className="card p-12 flex flex-col items-center gap-3">
-              <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent)' }} />
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Cargando predicciones…</p>
-            </div>
-          ) : featured.length > 0 ? (
-            <div className="space-y-2">
-              {featured.map((m, i) => (
-                <MatchCard key={i} match={m} index={i} onClick={() => setSelectedMatch(m)} />
-              ))}
-            </div>
-          ) : (
-            <div className="card p-8 text-center">
-              <p style={{ color: 'var(--text-muted)' }}>No hay partidos próximos disponibles.</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
-                El backend está en: {API_ROOT}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-3">
-          {/* Ligas disponibles */}
-          <div className="card p-5">
-            <h3 className="text-sm font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--text)' }}>
-              <span style={{ color: 'var(--accent)' }}>⚽</span> Ligas disponibles
-            </h3>
-            <div className="space-y-2">
-              {[
-                { flag: '🏆', name: 'Mundial 2026', id: 1 },
-                { flag: '🏴', name: 'Premier League', id: 39 },
-                { flag: '🇪🇸', name: 'La Liga', id: 140 },
-                { flag: '🇮🇹', name: 'Serie A', id: 135 },
-                { flag: '🇩🇪', name: 'Bundesliga', id: 78 },
-                { flag: '🇫🇷', name: 'Ligue 1', id: 61 },
-              ].map(l => (
-                <NavLink
-                  key={l.id}
-                  to="/predictions"
-                  className="flex items-center justify-between text-sm px-3 py-2 rounded-xl transition-colors hover:bg-white/5"
-                >
-                  <span>{l.flag} {l.name}</span>
-                  <ArrowRight size={12} style={{ color: 'var(--text-dim)' }} />
-                </NavLink>
-              ))}
-            </div>
+        {!loading && !error && featured.length > 0 && (
+          <div className="stack-dense" style={{ gap: 'var(--space-2)' }}>
+            {featured.map((m, i) => (
+              <MatchCard
+                key={`${m.home}-${m.away}-${m.sortDate ?? i}`}
+                match={m}
+                index={i}
+                onClick={() => setSelectedMatch(m)}
+              />
+            ))}
           </div>
-
-          {/* Mercados cubiertos */}
-          <div className="card p-5">
-            <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text)' }}>Mercados cubiertos</h3>
-            <div className="flex flex-wrap gap-2">
-              {['1X2', 'Más de 1.5', 'Más de 2.5', 'BTTS', 'DC 1X', 'DC X2'].map(m => (
-                <span key={m} className="text-xs px-2.5 py-1 rounded-lg font-medium"
-                  style={{ background: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
-                  {m}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       <MatchModal isOpen={!!selectedMatch} onClose={() => setSelectedMatch(null)} match={selectedMatch} />
