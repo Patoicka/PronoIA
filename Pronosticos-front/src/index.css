@@ -1,29 +1,89 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Kronos Nightboard — design tokens (PR 5)
+   Tipografía, spacing y paleta. Páginas se migran en PRs 6–9. */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @import "tailwindcss";
 
 @theme {
   --font-outfit: 'Outfit', sans-serif;
+  --font-display: 'Syne', 'Outfit', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* Design tokens */
+/* ---------------------------------------------------------------------------
+   Color — navy ink + ámbar puntual (sin purple / cream+terracotta)
+   --------------------------------------------------------------------------- */
 :root {
   --bg:            #0B1120;
+  --bg-elevated:   #0F172A;
   --surface:       #172033;
   --surface2:      #1F2940;
   --border:        #2A3655;
   --border2:       #3B4B72;
+
   --text:          #F8FAFC;
   --text-muted:    #94A3B8;
   --text-dim:      #64748B;
+
+  /* Acento: usar en CTA, pick activo y estado selected — no en todo el chrome */
   --accent:        #F59E0B;
+  --accent-hover:  #FBBF24;
+  --accent-fg:     #0B1120;
   --accent-bg:     rgba(245, 158, 11, 0.12);
   --accent-border: rgba(245, 158, 11, 0.35);
+
   --success:       #10B981;
   --success-bg:    rgba(16, 185, 129, 0.12);
   --danger:        #EF4444;
   --danger-bg:     rgba(239, 68, 68, 0.12);
+
+  --nav-bg:        rgba(11, 17, 32, 0.92);
+  --overlay:       rgba(0, 0, 0, 0.72);
+
+  /* Spacing system — densidad profesional (menos aire muerto) */
+  --space-1: 0.25rem;   /* 4 */
+  --space-2: 0.5rem;    /* 8 */
+  --space-3: 0.75rem;   /* 12 */
+  --space-4: 1rem;      /* 16 */
+  --space-5: 1.25rem;   /* 20 */
+  --space-6: 1.5rem;    /* 24 */
+  --space-8: 2rem;      /* 32 */
+
+  --space-page-x: 1.25rem;
+  --space-page-x-md: 2rem;
+  --space-page-y: 1.25rem;      /* antes ~1.5–2rem flojo */
+  --space-section: 1.25rem;     /* entre bloques de página */
+  --space-stack: 0.75rem;       /* stacks internos densos */
+  --space-row-y: 0.75rem;       /* padding vertical de filas */
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+
+  --nav-height: 3.5rem;
+
+  /* Type scale */
+  --text-display-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  --text-display-leading: 1.15;
+  --text-display-weight: 800;
+
+  --text-title-size: 1.125rem;      /* 18 */
+  --text-title-leading: 1.3;
+  --text-title-weight: 700;
+
+  --text-body-size: 0.875rem;       /* 14 */
+  --text-body-leading: 1.5;
+  --text-body-weight: 400;
+
+  --text-meta-size: 0.75rem;        /* 12 */
+  --text-meta-leading: 1.4;
+  --text-meta-weight: 500;
+
+  --font-sans: 'Outfit', sans-serif;
+  --font-brand: 'Syne', 'Outfit', sans-serif;
+  --font-mono-family: 'JetBrains Mono', monospace;
 }
 
 html, body, #root, #app {
@@ -35,28 +95,182 @@ html, body, #root, #app {
 }
 
 body {
-  background: var(--bg);
+  background-color: var(--bg);
+  /* Atmósfera base (sin glow neon): radial suave sobre ink */
+  background-image:
+    radial-gradient(ellipse 90% 55% at 12% -10%, rgba(245, 158, 11, 0.07), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(59, 130, 246, 0.05), transparent 50%),
+    linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg) 42%, var(--bg) 100%);
+  background-attachment: fixed;
   color: var(--text);
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-sans);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-leading);
+  font-weight: var(--text-body-weight);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Grain muy leve — no satura; PR 13 puede intensificar motion */
+body::before {
+  content: '';
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#root, #app {
+  position: relative;
+  z-index: 1;
 }
 
 @layer utilities {
+  /* --- Typography --- */
+  .text-display {
+    font-family: var(--font-brand);
+    font-size: var(--text-display-size);
+    line-height: var(--text-display-leading);
+    font-weight: var(--text-display-weight);
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+
+  .text-brand {
+    font-family: var(--font-brand);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+
+  .text-title {
+    font-family: var(--font-sans);
+    font-size: var(--text-title-size);
+    line-height: var(--text-title-leading);
+    font-weight: var(--text-title-weight);
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .text-body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-leading);
+    font-weight: var(--text-body-weight);
+    color: var(--text);
+  }
+
+  .text-meta {
+    font-family: var(--font-sans);
+    font-size: var(--text-meta-size);
+    line-height: var(--text-meta-leading);
+    font-weight: var(--text-meta-weight);
+    color: var(--text-muted);
+  }
+
+  .text-mono {
+    font-family: var(--font-mono-family);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Layout shell --- */
+  .page-shell {
+    max-width: 80rem; /* 7xl */
+    margin-inline: auto;
+    padding-inline: var(--space-page-x);
+    padding-block: var(--space-page-y);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-section);
+  }
+
+  @media (min-width: 768px) {
+    .page-shell {
+      padding-inline: var(--space-page-x-md);
+    }
+  }
+
+  .stack-dense {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-stack);
+  }
+
+  /* --- Nav --- */
+  .nav-shell {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    padding-inline: var(--space-page-x);
+    background: var(--nav-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  @media (min-width: 768px) {
+    .nav-shell {
+      padding-inline: var(--space-page-x-md);
+    }
+  }
+
+  .nav-inner {
+    max-width: 80rem;
+    margin-inline: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--nav-height);
+  }
+
+  .nav-link {
+    font-size: var(--text-body-size);
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: color 0.15s ease;
+  }
+  .nav-link:hover {
+    color: var(--text);
+  }
+  .nav-link-active {
+    color: var(--accent);
+  }
+
+  .nav-link-mobile {
+    display: block;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-body-size);
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .nav-link-mobile:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .nav-link-mobile-active {
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+
   /* Scrollbar */
   .hide-scrollbar::-webkit-scrollbar { display: none; }
   .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* Cards */
+  /* Cards — preferir filas en listas (PRs 6–7); card = interacción */
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     transition: border-color 0.15s, background 0.15s;
   }
   .card:hover { border-color: var(--border2); background: var(--surface2); }
   .card-active { border-color: var(--accent-border) !important; background: var(--accent-bg) !important; }
 
-  /* Accent glow */
+  /* Glow reservado — no usar en chrome general */
   .glow-accent { box-shadow: 0 0 24px rgba(245, 158, 11, 0.12); }
 
   /* Animations */
