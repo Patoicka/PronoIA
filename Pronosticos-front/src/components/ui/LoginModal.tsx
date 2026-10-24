@@ -1,41 +1,171 @@
-import React, { useEffect, useState } from 'react';
-import { X, Mail, Lock, User, Phone, Calendar } from 'lucide-react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { X, Mail, Lock, User, Phone, Calendar, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { DEFAULT_COUNTRY_CODE, dialForCountry } from '../../data/countryDialCodes';
+import { DialCodeSelect } from './DialCodeSelect';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Abre directamente en modo registro (CTA "Crear cuenta"). */
+  startInRegister?: boolean;
 }
 
-const API_ROOT = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
+const API_ROOT = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8002').replace(/\/$/, '');
 
-export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
+const emptyLogin = { correo: '', password: '' };
+const emptyRegister = {
+  nombres: '',
+  apellidos: '',
+  fecha_nacimiento: '',
+  correo: '',
+  countryCode: DEFAULT_COUNTRY_CODE,
+  telefonoLocal: '',
+  password: '',
+  password2: '',
+};
+
+function formatApiError(detail: unknown): string {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (typeof d === 'object' && d && 'msg' in d ? String((d as { msg: string }).msg) : String(d)))
+      .join('. ');
+  }
+  return 'Error desconocido';
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export const LoginModal: React.FC<LoginModalProps> = ({
+  isOpen,
+  onClose,
+  startInRegister = false,
+}) => {
   const { login } = useAuth();
-  const [isRegister, setIsRegister] = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+  const scrollYRef = useRef(0);
 
-  const [form, setForm] = useState({
-    nombres: '', apellidos: '', fecha_nacimiento: '',
-    correo: '', telefono: '', password: '', password2: '',
-  });
+  const [isRegister, setIsRegister] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showLoginPass, setShowLoginPass] = useState(false);
+  const [showRegPass, setShowRegPass] = useState(false);
+  const [showRegPass2, setShowRegPass2] = useState(false);
+
+  const [loginForm, setLoginForm] = useState(emptyLogin);
+  const [registerForm, setRegisterForm] = useState(emptyRegister);
+
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (isOpen) { document.body.style.overflow = 'hidden'; setIsRegister(false); setError(null); }
-    else document.body.style.overflow = '';
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
+    if (!isOpen) return;
+
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    scrollYRef.current = window.scrollY;
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollYRef.current}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+
+    setIsRegister(startInRegister);
+    setError(null);
+    setLoginForm(emptyLogin);
+    setRegisterForm(emptyRegister);
+    setShowLoginPass(false);
+    setShowRegPass(false);
+    setShowRegPass2(false);
+    setLoading(false);
+
+    const t = window.setTimeout(() => {
+      // Preferir el primer campo; si no, el botón cerrar
+      const firstField = panelRef.current?.querySelector<HTMLElement>(
+        'input:not([type="hidden"]), button.auth-close',
+      );
+      (firstField ?? closeBtnRef.current)?.focus();
+    }, 50);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loadingRef.current) {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const nodes = [...panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => !el.hasAttribute('disabled') && (el.offsetParent !== null || el === document.activeElement),
+      );
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKey);
+
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      window.scrollTo(0, scrollYRef.current);
+      previouslyFocused.current?.focus?.();
+    };
+  }, [isOpen, startInRegister]);
 
   if (!isOpen) return null;
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
+  const setLogin =
+    (k: keyof typeof emptyLogin) => (e: React.ChangeEvent<HTMLInputElement>) =>
+      setLoginForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const setRegister =
+    (k: keyof typeof emptyRegister) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setRegisterForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const switchMode = (nextRegister: boolean) => {
+    setIsRegister(nextRegister);
+    setError(null);
+    if (nextRegister) setRegisterForm(emptyRegister);
+    else setLoginForm(emptyLogin);
+    setShowLoginPass(false);
+    setShowRegPass(false);
+    setShowRegPass2(false);
+  };
+
+  const selectedDial = dialForCountry(registerForm.countryCode);
+
+  const buildPhone = (): string | undefined => {
+    const local = registerForm.telefonoLocal.replace(/\D/g, '');
+    if (!local) return undefined;
+    return `${selectedDial}${local}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (isRegister && form.password !== form.password2) {
+    if (isRegister && registerForm.password !== registerForm.password2) {
       setError('Las contraseñas no coinciden');
       return;
     }
@@ -44,11 +174,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     try {
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
       const body = isRegister
-        ? { nombres: form.nombres, apellidos: form.apellidos,
-            fecha_nacimiento: form.fecha_nacimiento || undefined,
-            correo: form.correo, telefono: form.telefono || undefined,
-            password: form.password }
-        : { correo: form.correo, password: form.password };
+        ? {
+            nombres: registerForm.nombres,
+            apellidos: registerForm.apellidos,
+            fecha_nacimiento: registerForm.fecha_nacimiento || undefined,
+            correo: registerForm.correo,
+            telefono: buildPhone(),
+            password: registerForm.password,
+          }
+        : { correo: loginForm.correo, password: loginForm.password };
 
       const res = await fetch(`${API_ROOT}${endpoint}`, {
         method: 'POST',
@@ -56,9 +190,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.detail ?? 'Error desconocido');
+        setError(formatApiError(data.detail) || `Error ${res.status}`);
         return;
       }
 
@@ -72,88 +206,244 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}>
-      <div className="card fade-in max-w-sm w-full overflow-hidden"
-        style={{ animationDuration: '0.25s', maxHeight: '90vh', overflowY: 'auto' }}
-        onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
-        <div className="p-6 text-center relative" style={{ borderBottom: '1px solid var(--border)' }}>
-          <button onClick={onClose}
-            className="absolute right-4 top-4 p-1.5 rounded-lg hover:bg-white/5 transition"
-            style={{ color: 'var(--text-muted)' }}>
-            <X size={18} />
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-5 auth-backdrop"
+      onClick={() => {
+        if (!loading) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="auth-panel fade-in w-full flex flex-col"
+        style={{
+          animationDuration: '0.22s',
+          maxWidth: isRegister ? '38rem' : '28rem',
+          maxHeight: 'calc(100dvh - 32px)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header fijo */}
+        <div className="relative flex-shrink-0 px-6 pt-5 pb-4 sm:px-7 sm:pt-6 sm:pb-5">
+          <button
+            ref={closeBtnRef}
+            onClick={onClose}
+            className="auth-close absolute right-4 top-4 sm:right-5 sm:top-5 z-10"
+            type="button"
+            aria-label="Cerrar"
+            disabled={loading}
+          >
+            <X size={16} />
           </button>
-          <div className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center mb-3 overflow-hidden"
-            style={{ background: 'var(--surface2)' }}>
-            <img src="/logo.png" alt="Kronos" className="w-12 h-12 object-contain" />
+
+          <div className="flex flex-col items-center text-center pt-1">
+            <div className="flex items-center gap-2.5 mb-3.5">
+              <img
+                src="/logo-mark.png"
+                alt=""
+                width={36}
+                height={36}
+                className="w-9 h-9 object-contain"
+                aria-hidden
+              />
+              <span className="text-brand text-xl leading-none" style={{ color: 'var(--text)' }}>
+                Kronos
+              </span>
+            </div>
+            <h2 id={titleId} className="text-title mb-1" style={{ fontSize: '1.375rem' }}>
+              {isRegister ? 'Crear cuenta' : 'Bienvenido'}
+            </h2>
+            <p className="text-meta" style={{ color: 'var(--text-muted)' }}>
+              {isRegister ? 'Únete y guarda tus picks' : 'Inicia sesión para continuar'}
+            </p>
           </div>
-          <h3 className="text-lg font-black mb-1" style={{ color: 'var(--text)' }}>
-            {isRegister ? 'Crear cuenta' : 'Bienvenido'}
-          </h3>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            {isRegister ? 'Únete a Kronos' : 'Inicia sesión para continuar'}
-          </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-3">
-          {isRegister && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field icon={<User size={15} />} type="text" placeholder="Nombres"
-                  label="Nombres" value={form.nombres} onChange={set('nombres')} required />
-                <Field icon={<User size={15} />} type="text" placeholder="Apellidos"
-                  label="Apellidos" value={form.apellidos} onChange={set('apellidos')} required />
-              </div>
-              <Field icon={<Calendar size={15} />} type="date" placeholder=""
-                label="Fecha de nacimiento" value={form.fecha_nacimiento} onChange={set('fecha_nacimiento')} />
-              <Field icon={<Phone size={15} />} type="tel" placeholder="+52 55 0000 0000"
-                label="Teléfono" value={form.telefono} onChange={set('telefono')} />
-            </>
-          )}
+        {/* Cuerpo con scroll */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-2 sm:px-7 hide-scrollbar">
+          <form
+            key={isRegister ? 'kronos-register' : 'kronos-login'}
+            onSubmit={handleSubmit}
+            className="flex flex-col"
+            style={{ gap: '1rem' }}
+            autoComplete="on"
+          >
+            {isRegister ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field
+                    icon={<User size={16} />}
+                    type="text"
+                    name="reg_nombres"
+                    placeholder="Nombre(s)"
+                    label="Nombres"
+                    value={registerForm.nombres}
+                    onChange={setRegister('nombres')}
+                    required
+                    autoComplete="given-name"
+                  />
+                  <Field
+                    icon={<User size={16} />}
+                    type="text"
+                    name="reg_apellidos"
+                    placeholder="Apellido(s)"
+                    label="Apellidos"
+                    value={registerForm.apellidos}
+                    onChange={setRegister('apellidos')}
+                    required
+                    autoComplete="family-name"
+                  />
+                </div>
 
-          <Field icon={<Mail size={15} />} type="email" placeholder="tu@correo.com"
-            label="Correo" value={form.correo} onChange={set('correo')} required />
-          <Field icon={<Lock size={15} />} type="password" placeholder="••••••••"
-            label="Contraseña" value={form.password} onChange={set('password')} required />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field
+                    icon={<Calendar size={16} />}
+                    type="date"
+                    name="reg_fecha"
+                    placeholder=""
+                    label="Fecha de nacimiento"
+                    value={registerForm.fecha_nacimiento}
+                    onChange={setRegister('fecha_nacimiento')}
+                    autoComplete="bday"
+                  />
+                  <div>
+                    <label className="auth-label" htmlFor="reg_telefono">
+                      Teléfono
+                    </label>
+                    <div className="flex gap-2">
+                      <DialCodeSelect
+                        value={registerForm.countryCode}
+                        onChange={(c) => setRegisterForm((f) => ({ ...f, countryCode: c.code }))}
+                      />
+                      <div className="relative flex-1 min-w-0">
+                        <span
+                          className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                          style={{ color: 'var(--text-dim)' }}
+                          aria-hidden
+                        >
+                          <Phone size={16} />
+                        </span>
+                        <input
+                          id="reg_telefono"
+                          type="tel"
+                          name="reg_telefono"
+                          inputMode="numeric"
+                          placeholder="55 0000 0000"
+                          value={registerForm.telefonoLocal}
+                          onChange={setRegister('telefonoLocal')}
+                          autoComplete="tel-national"
+                          className="field-input"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-          {isRegister && (
-            <Field icon={<Lock size={15} />} type="password" placeholder="••••••••"
-              label="Confirmar contraseña" value={form.password2} onChange={set('password2')} required />
-          )}
+                <Field
+                  icon={<Mail size={16} />}
+                  type="email"
+                  name="reg_correo"
+                  placeholder="tu@correo.com"
+                  label="Correo"
+                  value={registerForm.correo}
+                  onChange={setRegister('correo')}
+                  required
+                  autoComplete="email"
+                />
 
-          {!isRegister && (
-            <div className="text-right">
-              <button type="button" className="text-xs font-semibold transition hover:opacity-70"
-                style={{ color: 'var(--accent)' }}>
-                ¿Olvidaste tu contraseña?
-              </button>
-            </div>
-          )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field
+                    icon={<Lock size={16} />}
+                    type={showRegPass ? 'text' : 'password'}
+                    name="reg_password"
+                    placeholder="••••••••"
+                    label="Contraseña"
+                    value={registerForm.password}
+                    onChange={setRegister('password')}
+                    required
+                    autoComplete="new-password"
+                    toggle={{
+                      shown: showRegPass,
+                      onToggle: () => setShowRegPass((v) => !v),
+                    }}
+                  />
+                  <Field
+                    icon={<Lock size={16} />}
+                    type={showRegPass2 ? 'text' : 'password'}
+                    name="reg_password2"
+                    placeholder="••••••••"
+                    label="Confirmar contraseña"
+                    value={registerForm.password2}
+                    onChange={setRegister('password2')}
+                    required
+                    autoComplete="new-password"
+                    toggle={{
+                      shown: showRegPass2,
+                      onToggle: () => setShowRegPass2((v) => !v),
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <Field
+                  icon={<Mail size={16} />}
+                  type="email"
+                  name="login_correo"
+                  placeholder="tu@correo.com"
+                  label="Correo"
+                  value={loginForm.correo}
+                  onChange={setLogin('correo')}
+                  required
+                  autoComplete="username"
+                />
+                <Field
+                  icon={<Lock size={16} />}
+                  type={showLoginPass ? 'text' : 'password'}
+                  name="login_password"
+                  placeholder="••••••••"
+                  label="Contraseña"
+                  value={loginForm.password}
+                  onChange={setLogin('password')}
+                  required
+                  autoComplete="current-password"
+                  toggle={{
+                    shown: showLoginPass,
+                    onToggle: () => setShowLoginPass((v) => !v),
+                  }}
+                />
+              </>
+            )}
 
-          {error && (
-            <p className="text-xs text-center px-2 py-2 rounded-lg"
-              style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>
-              {error}
-            </p>
-          )}
+            {error && (
+              <p
+                className="text-xs text-center px-3 py-2.5 rounded-lg"
+                style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
 
-          <button type="submit" disabled={loading}
-            className="w-full font-bold py-2.5 rounded-xl text-white text-sm transition hover:opacity-90 disabled:opacity-50"
-            style={{ background: 'var(--accent)' }}>
-            {loading ? 'Cargando…' : isRegister ? 'Crear cuenta' : 'Iniciar sesión'}
-          </button>
-        </form>
+            <button type="submit" disabled={loading} className="auth-btn mt-1">
+              {loading ? 'Cargando…' : isRegister ? 'Crear cuenta' : 'Iniciar sesión'}
+            </button>
+          </form>
+        </div>
 
-        <div className="px-6 pb-5 text-center">
+        {/* Footer */}
+        <div className="flex-shrink-0 px-6 pt-4 pb-6 sm:px-7 sm:pb-7 text-center">
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
             {isRegister ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? '}
-            <button type="button" onClick={() => { setIsRegister(v => !v); setError(null); }}
-              className="font-bold hover:underline transition"
-              style={{ color: 'var(--accent)' }}>
+            <button
+              type="button"
+              onClick={() => switchMode(!isRegister)}
+              className="font-bold focus-ring rounded-sm"
+              style={{ color: 'var(--accent)' }}
+              disabled={loading}
+            >
               {isRegister ? 'Inicia sesión' : 'Regístrate'}
             </button>
           </p>
@@ -164,30 +454,51 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 };
 
 const Field: React.FC<{
-  icon: React.ReactNode; type: string; placeholder: string;
-  label: string; value: string; onChange: React.ChangeEventHandler<HTMLInputElement>;
+  icon: React.ReactNode;
+  type: string;
+  name: string;
+  placeholder: string;
+  label: string;
+  value: string;
+  onChange: React.ChangeEventHandler<HTMLInputElement>;
   required?: boolean;
-}> = ({ icon, type, placeholder, label, value, onChange, required }) => (
+  autoComplete?: string;
+  toggle?: { shown: boolean; onToggle: () => void };
+}> = ({ icon, type, name, placeholder, label, value, onChange, required, autoComplete, toggle }) => (
   <div>
-    <label className="block text-xs font-bold mb-1.5 uppercase tracking-wide"
-      style={{ color: 'var(--text-dim)' }}>
+    <label className="auth-label" htmlFor={name}>
       {label}
     </label>
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-dim)' }}>
+      <span
+        className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+        style={{ color: 'var(--text-dim)' }}
+        aria-hidden
+      >
         {icon}
       </span>
       <input
         type={type}
+        name={name}
+        id={name}
         placeholder={placeholder}
         value={value}
         onChange={onChange}
         required={required}
-        className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl outline-none transition-colors"
-        style={{ background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text)' }}
-        onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
-        onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+        autoComplete={autoComplete}
+        className={`field-input${toggle ? ' has-toggle' : ''}`}
       />
+      {toggle && (
+        <button
+          type="button"
+          onClick={toggle.onToggle}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md focus-ring"
+          style={{ color: 'var(--text-dim)' }}
+          aria-label={toggle.shown ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        >
+          {toggle.shown ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      )}
     </div>
   </div>
 );

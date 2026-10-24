@@ -254,7 +254,6 @@ export const standings: Record<string, any[]> = {
 };
 
 export const leaguesList = [
-  { name:'Mundial 2026', flag:'🏆', id:'mundial-2026' },
   { name:'La Liga', flag:'🇪🇸', id:'la-liga' },
   { name:'Premier League', flag:'🏴', id:'premier-league' },
   { name:'Serie A', flag:'🇮🇹', id:'serie-a' },
